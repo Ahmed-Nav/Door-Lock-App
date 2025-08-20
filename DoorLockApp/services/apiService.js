@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = 'http://localhost:5000/api/unlock';
+const API_URL = 'http://192.168.1.8:5000/api/unlock';
 
 export const getPayload = async (userName, yearOfBirth) => {
   try{

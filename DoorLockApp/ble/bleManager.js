@@ -1,12 +1,34 @@
-import { BleManager } from "react-native-ble-plx";
+import { encodeFrame, toHex } from './bleEncoding';
+import { ensureBlePermissions } from './permissions'
+import { startNativeAdvertising, stopNativeAdvertising } from './nativeAdvertiser'
+import { Buffer } from 'buffer';
 
-const bleManager = new BleManager();
+export async function advertiseBeacon(payload) {
+  // payload : { userId: "Name_Year", timestamp: <ms or sec> }
+  const frame = encodeFrame(payload.userId, payload.timestamp);
+  const asHex = toHex(frame);
+  console.log("Ble frame (12 bytes):", asHex)
 
-export const advertiseBeacon = async (payload) => {
-  // WARNING: BLE advertising requires platform-specific implementation
-  // iOS: Only works in background for specific UUIDs
-  // Android: BLE Advertising supported
-  // For prototype, log the payload to simulate sending
-  console.log("Advertising BLE Beacon:", payload);
-  // Future: use native modules to actually advertise payload
-};
+  const ok = await ensureBlePermissions();
+  if(!ok) throw new Error('Ble permissions not granted');
+
+  // Convert Uint8Array -> base64
+  const base64 = Buffer.from(frame).toString('base64');
+  
+  try {
+    const res = await startNativeAdvertising(base64, 0x1234);
+    console.log('Native advertise result:', res);
+  } catch (error) {
+    console.error('Native advertise error:', error);
+    throw error;
+  }
+  return frame;
+}
+
+export async function stopAdvertising() {
+  try {
+    return await stopNativeAdvertising();
+  } catch (error) {
+    console.warn('stopAdvertising error:', error);
+  }
+}
