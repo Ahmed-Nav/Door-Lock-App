@@ -14,15 +14,14 @@ export async function advertiseBeacon(payload) {
 
   // Convert Uint8Array -> base64
   const base64 = Buffer.from(frame).toString('base64');
-  
+
   try {
     const res = await startNativeAdvertising(base64, 0x1234);
-    console.log('Native advertise result:', res);
+    return res;
   } catch (error) {
     console.error('Native advertise error:', error);
     throw error;
   }
-  return frame;
 }
 
 export async function stopAdvertising() {
