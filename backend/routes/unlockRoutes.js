@@ -6,6 +6,7 @@ const { generatePayload } = require('../services/payloadService');
 router.post('/payload', (req,res) => {
   const { userName, yearOfBirth } = req.body;
 
+  console.log(req.body);
   // Simple validation
   if(!userName || !yearOfBirth) {
     return res.status(400).json({ error: "userName and yearOfBirth required" });

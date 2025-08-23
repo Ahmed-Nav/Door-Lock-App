@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = 'http://192.168.1.36:5000/api/unlock';
+const API_URL = 'https://door-lock-app.onrender.com/api/unlock';
 
 export const getPayload = async (userName, yearOfBirth) => {
   try{
