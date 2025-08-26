@@ -1,11 +1,11 @@
-function generatePayload(userName = "TestUser", yearOfBirth = 1990) {
-  const userId = createUserId(userName, yearOfBirth);
+function generatePayload(userEmail = "test@example.com") {
+  const userId = createUserId(userEmail);
   const timestamp = Date.now();
   return { userId, timestamp };
 }
 
-function createUserId(userName, yearOfBirth) {
-  return `${userName}_${yearOfBirth}`;
+function createUserId(userEmail) {
+  return userEmail;
 }
 
 module.exports = { generatePayload };

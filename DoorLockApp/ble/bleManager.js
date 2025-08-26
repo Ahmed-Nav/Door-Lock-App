@@ -4,7 +4,7 @@ import { startNativeAdvertising, stopNativeAdvertising } from './nativeAdvertise
 import { Buffer } from 'buffer';
 
 export async function advertiseBeacon(payload) {
-  // payload : { userId: "Name_Year", timestamp: <ms or sec> }
+  // payload : { userId: "email", timestamp: <ms> }
   const frame = encodeFrame(payload.userId, payload.timestamp);
   const asHex = toHex(frame);
   console.log("Ble frame (12 bytes):", asHex)

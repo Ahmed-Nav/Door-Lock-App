@@ -1,23 +1,37 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+// app.js
+require("dotenv").config();
+const express = require("express");
+const connectDB = require("./services/db");
+const authRoutes = require("./routes/authRoutes");
+const unlockRoutes = require("./routes/unlockRoutes");
 
-const app = express();
+const { clerkMiddleware } = require("@clerk/express");
 
-// Middlewares
-app.use(cors());
-app.use(bodyParser.json());
+async function start() {
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error("MongoDB connect failed", err);
+    process.exit(1);
+  }
 
-// Routes
-const unlockRoutes = require('./routes/unlockRoutes');
-app.use('/api/unlock', unlockRoutes);
+  const app = express();
+  app.use(express.json());
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
+  // Attach Clerk middleware (it attaches helpers like getAuth, requireAuth)
+  app.use(
+    clerkMiddleware({
+      apiKey: process.env.CLERK_SECRET_KEY,
+    })
+  );
 
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  app.use("/api/auth", authRoutes); // POST /api/auth/sync
+  app.use("/api/unlock", unlockRoutes); // POST /api/unlock/payload
+
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () =>
+    console.log(`Backend running on http://localhost:${PORT}`)
+  );
+}
+
+start();

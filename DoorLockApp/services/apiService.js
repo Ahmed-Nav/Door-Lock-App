@@ -1,13 +1,33 @@
 import axios from "axios";
 
-const API_URL = 'https://door-lock-app.onrender.com/api/unlock';
+const API_URL = 'https://door-lock-app.onrender.com/api';
 
-export const getPayload = async (userName, yearOfBirth) => {
+export const getPayload = async (token) => {
   try{
-    const response = await axios.post(`${API_URL}/payload`, { userName, yearOfBirth });
-    return response.data.payload;
+    const res = await axios.post(`${API_URL}/unlock/payload`, {}, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      }
+    });
+    return res.data.payload;
   } catch (err) {
-    console.error(err);
+    console.error("getPayload error:", err.response?.data || err.message || err);
+    throw err;
+  }
+};
+
+export const syncUserToBackend = async (token) => {
+  try {
+    const res = await axios.post(`${API_URL}/auth/sync`, {}, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    return res.data;
+  } catch (err) {
+    console.error("syncUserToBackend error:", err.response?.data || err.message || err);
     throw err;
   }
 };

@@ -13,10 +13,13 @@
     "@react-native/new-app-screen": "0.81.0",
     "axios": "^1.11.0",
     "buffer": "^6.0.3",
+    "jwt-decode": "^3.1.2",
     "react": "19.1.0",
     "react-native": "0.81.0",
+    "react-native-app-auth": "^8.0.3",
     "react-native-ble-plx": "^3.5.0",
     "react-native-get-random-values": "^1.11.0",
+    "react-native-keychain": "^10.0.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-navigation": "^5.0.0"
   },
