@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Button, Text, Alert } from "react-native";
+import { View, Text, Alert, TouchableOpacity, StyleSheet } from "react-native";
 import { getPayload, syncUserToBackend } from "../services/apiService";
 import { advertiseBeacon, stopAdvertising } from "../ble/bleManager";
 import { toHex } from "../ble/bleEncoding";
 import  jwt_Decode  from "jwt-decode";
 import { authorize } from "react-native-app-auth";
 import * as Keychain from 'react-native-keychain';
+import LinearGradient from 'react-native-linear-gradient';
 
 const OAUTH_CONFIG = {
   clientId: '2JbPx2I2fknWbmf8',
@@ -24,7 +25,7 @@ const UnlockScreen = () => {
   const [userEmail, setUserEmail] = useState(null);
   const [tokens, setTokens] = useState(null);
   const [status, setStatus] = useState('');
-  const [lastFrameHex, setLastFrameHex] = useState("");
+  const [lastFrameHex, setLastFrameHex] = useState('');
   const [frames, setFrames] = useState([]);
 
   useEffect(() => {
@@ -53,16 +54,20 @@ const UnlockScreen = () => {
     })();
   }, []);
 
-//sign in with clerk
+  //sign in with clerk
   const signIn = async () => {
     try {
       const authState = await authorize(OAUTH_CONFIG);
       // authState: { accessToken, idToken, refreshToken, accessTokenExpirationDate}
       setTokens(authState);
       await Keychain.setGenericPassword('clerk', JSON.stringify(authState));
-      const rawToken = authState.idToken || authState.accessToken || authState.id_token || authState.access_token;
+      const rawToken =
+        authState.idToken ||
+        authState.accessToken ||
+        authState.id_token ||
+        authState.access_token;
       const decoded = rawToken ? jwt_Decode(rawToken) : {};
-      const email = decoded.email || (decoded?.email);
+      const email = decoded.email || decoded?.email;
       if (email) setUserEmail(email);
 
       // send token to backend to create/save user record
@@ -95,23 +100,26 @@ const UnlockScreen = () => {
       return;
     }
 
-    const token = tokens.idToken || tokens.accessToken || tokens.id_token || tokens.access_token;
+    const token =
+      tokens.idToken ||
+      tokens.accessToken ||
+      tokens.id_token ||
+      tokens.access_token;
     if (!token) {
       Alert.alert('Please Sign In First');
       return;
     }
 
-
     try {
       const payload = await getPayload(token);
-      if (!payload) throw new Error("Error getting payload from backend");
+      if (!payload) throw new Error('Error getting payload from backend');
 
       setStatus('Advertising Unlock Request...');
       const sentFrames = [];
 
       for (let i = 0; i < 5; i++) {
         const frame = await advertiseBeacon(payload);
-        const hex = frame ? toHex(frame) : `frame-${i+1}`;
+        const hex = frame ? toHex(frame) : `frame-${i + 1}`;
         sentFrames.push(hex);
         setLastFrameHex(hex);
         // Wait for a short period before advertising the next frame
@@ -133,39 +141,114 @@ const UnlockScreen = () => {
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text style={{ marginBottom: 8 }}>
-        {userEmail ? `Signed in as: ${userEmail}` : 'Not signed in'}
-      </Text>
+    <LinearGradient
+      colors={['#2E0249', '#570A57', '#A91079']}
+      style={styles.container}
+    >
+      <View style={styles.card}>
+        <Text style={styles.headerText}>
+          {userEmail ? `Signed in as:\n${userEmail}` : 'Not signed in'}
+        </Text>
 
-      <Button
-        title={userEmail ? 'Sign in again' : 'Sign in with Clerk'}
-        onPress={signIn}
-      />
+        {/* Unlock button */}
+        <TouchableOpacity
+          style={[
+            styles.button,
+            { backgroundColor: userEmail ? '#7B1FA2' : '#9E9E9E' },
+          ]}
+          onPress={handleUnlock}
+          disabled={!userEmail}
+        >
+          <Text style={styles.buttonText}>Unlock</Text>
+        </TouchableOpacity>
 
-      <View style={{ height: 12 }} />
+        {/* Sign in/out toggle */}
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#9C27B0' }]}
+          onPress={userEmail ? signOut : signIn}
+        >
+          <Text style={styles.buttonText}>
+            {userEmail ? 'Sign Out' : 'Sign In with Clerk'}
+          </Text>
+        </TouchableOpacity>
 
-      <Button
-        title="Unlock (broadcast 5 frames)"
-        onPress={handleUnlock}
-        disabled={!userEmail}
-      />
-
-      <View style={{ height: 12 }} />
-
-      <Button title="Sign out" onPress={signOut} />
-
-      <View style={{ height: 16 }} />
-      <Text>Status: {status}</Text>
-
-      {lastFrameHex ? (
-        <View style={{ marginTop: 8 }}>
-          <Text>Last frame (hex):</Text>
-          <Text selectable>{lastFrameHex}</Text>
+        {/* Status */}
+        <View style={styles.statusContainer}>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: userEmail ? 'limegreen' : 'red' },
+            ]}
+          />
+          <Text style={styles.statusText}>{status || 'Idle'}</Text>
         </View>
-      ) : null}
-    </View>
+
+        {lastFrameHex ? (
+          <View style={{ marginTop: 12 }}>
+            <Text style={styles.subText}>Last frame (hex):</Text>
+            <Text selectable style={styles.subText}>
+              {lastFrameHex}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </LinearGradient>
   );
-}
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  card: {
+    width: '90%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  headerText: {
+    color: 'white',
+    fontSize: 18,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  button: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginVertical: 8,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 50,
+    marginRight: 8,
+  },
+  statusText: {
+    color: 'white',
+  },
+  subText: {
+    color: '#E1BEE7',
+    fontSize: 14,
+  },
+});
 
 export default UnlockScreen;

@@ -18,15 +18,32 @@ async function start() {
   const app = express();
   app.use(express.json());
 
-  // Attach Clerk middleware (it attaches helpers like getAuth, requireAuth)
+
+  
   app.use(
     clerkMiddleware({
-      apiKey: process.env.CLERK_SECRET_KEY,
+      secretKey: process.env.CLERK_SECRET_KEY,
     })
   );
 
-  app.use("/api/auth", authRoutes); // POST /api/auth/sync
-  app.use("/api/unlock", unlockRoutes); // POST /api/unlock/payload
+
+
+  app.use("/api", (req, _res, next) => {
+    console.log(`[API] ${req.method} ${req.originalUrl}`);
+    next();
+  });
+
+  app.use("/api/auth", authRoutes);
+  app.use("/api/unlock", unlockRoutes);
+
+
+  app.use("/api", (req, res) => {
+    res.status(404).json({
+      error: "API route not found",
+      method: req.method,
+      path: req.originalUrl,
+    });
+  });
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () =>
