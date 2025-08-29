@@ -4,6 +4,7 @@ const express = require("express");
 const connectDB = require("./services/db");
 const authRoutes = require("./routes/authRoutes");
 const unlockRoutes = require("./routes/unlockRoutes");
+const verifyClerkOidc = require("./middleware/verifyClerkOidc");
 
 const { clerkMiddleware } = require("@clerk/express");
 
@@ -20,11 +21,11 @@ async function start() {
 
 
   
-  app.use(
-    clerkMiddleware({
-      secretKey: process.env.CLERK_SECRET_KEY,
-    })
-  );
+  //app.use(
+  //  clerkMiddleware({
+  //    secretKey: process.env.//CLERK_SECRET_KEY,
+  //  })
+  //);
 
 
 
