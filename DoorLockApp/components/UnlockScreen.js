@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Alert, TouchableOpacity, StyleSheet } from "react-native";
 import { getPayload, syncUserToBackend } from "../services/apiService";
-import { advertiseBeacon, stopAdvertising } from "../ble/bleManager";
+import { advertiseOneFrame, stopAdvertising } from "../ble/bleManager";
 import { toHex } from "../ble/bleEncoding";
 import  jwt_Decode  from "jwt-decode";
 import { authorize } from "react-native-app-auth";
@@ -25,8 +25,6 @@ const UnlockScreen = () => {
   const [userEmail, setUserEmail] = useState(null);
   const [tokens, setTokens] = useState(null);
   const [status, setStatus] = useState('');
-  const [lastFrameHex, setLastFrameHex] = useState('');
-  const [frames, setFrames] = useState([]);
 
   useEffect(() => {
     // on mount, load stored tokens
@@ -86,7 +84,6 @@ const UnlockScreen = () => {
       setTokens(null);
       setUserEmail(null);
       Alert.alert('Signed Out');
-      setFrames([]);
       setLastFrameHex('');
     } catch (error) {
       console.warn('Sign Out Error', error);
@@ -115,17 +112,10 @@ const UnlockScreen = () => {
       if (!payload) throw new Error('Error getting payload from backend');
 
       setStatus('Advertising Unlock Request...');
-      const sentFrames = [];
 
       for (let i = 0; i < 5; i++) {
-        const frame = await advertiseBeacon(payload);
-        const hex = frame ? toHex(frame) : `frame-${i + 1}`;
-        sentFrames.push(hex);
-        setLastFrameHex(hex);
-        // Wait for a short period before advertising the next frame
-        await sleep(1000);
+        const frame = await advertiseOneFrame(payload, 200);
       }
-      setFrames(sentFrames);
       setStatus('Unlock Request Sent (5 frames)');
     } catch (error) {
       setStatus('Error Sending Unlock Request');
@@ -183,14 +173,6 @@ const UnlockScreen = () => {
           <Text style={styles.statusText}>{status || 'Idle'}</Text>
         </View>
 
-        {lastFrameHex ? (
-          <View style={{ marginTop: 12 }}>
-            <Text style={styles.subText}>Last frame (hex):</Text>
-            <Text selectable style={styles.subText}>
-              {lastFrameHex}
-            </Text>
-          </View>
-        ) : null}
       </View>
     </LinearGradient>
   );

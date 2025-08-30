@@ -3,31 +3,29 @@ import { ensureBlePermissions } from './permissions'
 import { startNativeAdvertising, stopNativeAdvertising } from './nativeAdvertiser'
 import { Buffer } from 'buffer';
 
-export async function advertiseBeacon(payload) {
-  // payload : { userId: "email", timestamp: <ms> }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+export async function advertiseOneFrame(payload, dwellMs = 200) {
   const frame = encodeFrame(payload.userId, payload.timestamp);
-  const asHex = toHex(frame);
-  console.log("Ble frame (12 bytes):", asHex)
+  console.log('Ble frame (12 bytes):', toHex(frame));
 
   const ok = await ensureBlePermissions();
-  if(!ok) throw new Error('Ble permissions not granted');
+  if (!ok) throw new Error('Ble permissions not granted');
 
-  // Convert Uint8Array -> base64
   const base64 = Buffer.from(frame).toString('base64');
 
-  try {
-    const res = await startNativeAdvertising(base64, 0x1234);
-    return res;
-  } catch (error) {
-    console.error('Native advertise error:', error);
-    throw error;
-  }
+  await startNativeAdvertising(base64, 0x1234); // start
+  await sleep(dwellMs); // keep on-air briefly
+  await stopNativeAdvertising(); // STOP this frame
+
+  return frame; // (optional) bytes for debugging
 }
 
+// Keep this for safety if you want to force a stop somewhere else
 export async function stopAdvertising() {
   try {
     return await stopNativeAdvertising();
-  } catch (error) {
-    console.warn('stopAdvertising error:', error);
+  } catch (e) {
+    console.warn('stopAdvertising error:', e);
   }
 }
