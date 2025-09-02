@@ -1,1 +1,8 @@
+# never commit secrets
+.env
+*.env
+**/.env
 backend/.env
+
+# but allow templates
+!.env.example
