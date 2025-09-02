@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Alert, TouchableOpacity, StyleSheet } from "react-native";
-import { getPayload, syncUserToBackend } from "../services/apiService";
-import { advertiseOneFrame, stopAdvertising } from "../ble/bleManager";
-import { toHex } from "../ble/bleEncoding";
+import { getUnlockToken, syncUserToBackend } from "../services/apiService";
+import { advertiseTokenBase64, stopAdvertising } from "../ble/bleManager";
 import  jwt_Decode  from "jwt-decode";
 import { authorize } from "react-native-app-auth";
 import * as Keychain from 'react-native-keychain';
@@ -18,8 +17,6 @@ const OAUTH_CONFIG = {
     tokenEndpoint: 'https://moving-ferret-78.clerk.accounts.dev/oauth/token',
   },
 };
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const UnlockScreen = () => {
   const [userEmail, setUserEmail] = useState(null);
@@ -84,7 +81,6 @@ const UnlockScreen = () => {
       setTokens(null);
       setUserEmail(null);
       Alert.alert('Signed Out');
-      setLastFrameHex('');
     } catch (error) {
       console.warn('Sign Out Error', error);
     }
@@ -108,13 +104,10 @@ const UnlockScreen = () => {
     }
 
     try {
-      const payload = await getPayload(token);
-      if (!payload) throw new Error('Error getting payload from backend');
-
-      setStatus('Advertising Unlock Request...');
-
+      const base64 = await getUnlockToken(token);
+      setStatus("Advertising Unlock Request...");
       for (let i = 0; i < 5; i++) {
-        const frame = await advertiseOneFrame(payload, 200);
+        await advertiseTokenBase64(base64, 200);
       }
       setStatus('Unlock Request Sent (5 frames)');
     } catch (error) {

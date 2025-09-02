@@ -17,6 +17,21 @@ export const getPayload = async (token) => {
   }
 };
 
+export const getUnlockToken = async token => {
+  const res = await axios.post(
+    `${API_URL}/unlock/token`,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    },
+  );
+  return res.data.payload; // base64 string
+};
+
+
 export const syncUserToBackend = async (token) => {
   try {
     const res = await axios.post(`${API_URL}/auth/sync`, {}, {
