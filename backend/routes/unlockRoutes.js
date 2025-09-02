@@ -3,7 +3,7 @@ const router = express.Router();
 const { generatePayload } = require("../services/payloadService");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const crypto = require("crypto");
-const verifyClerkOidc = require("../middleware/verifyClerkOidc");
+
 
 router.get("/health", (_req, res) => res.json({ ok: true, router: "unlock" }));
 
