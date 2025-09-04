@@ -1,43 +1,28 @@
-// npm i jose
-const { createRemoteJWKSet, jwtVerify } = require("jose");
+// backend/routes/authRoutes.js
+const express = require("express");
+const router = express.Router();
+const verifyClerkOidc = require("../middleware/verifyClerkOidc");
+const UsersService = require("../services/userService");
 
-module.exports = async function verifyClerkOidc(req, res, next) {
+// POST /api/auth/sync
+// Mobile sends Authorization: Bearer <idToken|accessToken> (Clerk)
+// This will upsert the user in your Mongo "users" collection.
+router.post("/sync", verifyClerkOidc, async (req, res) => {
   try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-    if (!token) return res.status(401).json({ error: "No token" });
+    const email = req.userEmail;
+    const sub = req.userSub; // Clerk "sub" (stable user id)
+    if (!email) return res.status(400).json({ error: "No email in token" });
 
-    // Read iss from the token payload (no verify yet)
-    const [, payloadB64] = token.split(".");
-    const payloadPreview = JSON.parse(
-      Buffer.from(payloadB64, "base64url").toString()
-    );
-    const iss = (payloadPreview.iss || "").replace(/\/$/, ""); // strip trailing slash
-    if (!iss) return res.status(401).json({ error: "Token missing iss" });
+    // Upsert on clerkId; store email for querying by seed/access tools
+    await UsersService.upsert({ clerkId: sub || email, email });
 
-    const JWKS = createRemoteJWKSet(new URL(`${iss}/.well-known/jwks.json`));
-
-    const { payload } = await jwtVerify(token, JWKS, { issuer: iss });
-    req.userId = payload.sub;
-    req.userEmail = payload.email || payload["email"] || null;
-
-    // Optional fallback: if email claim is missing, ask Clerk
-    if (!req.userEmail) {
-      try {
-        const { clerkClient } = require("@clerk/clerk-sdk-node");
-        const u = await clerkClient.users.getUser(req.userId);
-        req.userEmail =
-          u?.emailAddresses?.[0]?.emailAddress ||
-          u?.primaryEmailAddress?.emailAddress ||
-          null;
-      } catch {}
-    }
-
-    if (!req.userEmail)
-      return res.status(400).json({ error: "No email found" });
-    return next();
+    // tiny debug to server logs
+    console.log(`[AUTH/SYNC] upsert ok email=${email} sub=${sub}`);
+    res.json({ ok: true, email });
   } catch (e) {
-    console.error("OIDC verify failed:", e.message);
-    return res.status(401).json({ error: "Unauthorized" });
+    console.error(e);
+    res.status(500).json({ error: e.message || "server error" });
   }
-};
+});
+
+module.exports = router;

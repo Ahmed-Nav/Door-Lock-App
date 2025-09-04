@@ -17,10 +17,10 @@ export const getPayload = async (token) => {
   }
 };
 
-export const getUnlockToken = async token => {
+export const getUnlockToken = async (token, lockId) => {
   const res = await axios.post(
     `${API_URL}/unlock/token`,
-    {},
+    { lockId }, // <— send lockId
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -28,8 +28,9 @@ export const getUnlockToken = async token => {
       },
     },
   );
-  return res.data.payload; // base64 string
+  return res.data.payload; // base64
 };
+
 
 
 export const syncUserToBackend = async (token) => {

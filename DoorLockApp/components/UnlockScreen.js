@@ -22,6 +22,8 @@ const UnlockScreen = () => {
   const [userEmail, setUserEmail] = useState(null);
   const [tokens, setTokens] = useState(null);
   const [status, setStatus] = useState('');
+  const LOCK_ID = 101;
+
 
   useEffect(() => {
     // on mount, load stored tokens
@@ -104,8 +106,8 @@ const UnlockScreen = () => {
     }
 
     try {
-      const base64 = await getUnlockToken(token);
-      setStatus("Advertising Unlock Request...");
+      const base64 = await getUnlockToken(token, LOCK_ID);
+      setStatus('Advertising Unlock Request...');
       for (let i = 0; i < 5; i++) {
         await advertiseTokenBase64(base64, 200);
       }

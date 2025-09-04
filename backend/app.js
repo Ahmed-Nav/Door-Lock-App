@@ -4,9 +4,7 @@ const express = require("express");
 const connectDB = require("./services/db");
 const authRoutes = require("./routes/authRoutes");
 const unlockRoutes = require("./routes/unlockRoutes");
-const verifyClerkOidc = require("./middleware/verifyClerkOidc");
-
-const { clerkMiddleware } = require("@clerk/express");
+const accessRoutes = require("./routes/accessRoutes");
 
 async function start() {
   try {
@@ -19,16 +17,6 @@ async function start() {
   const app = express();
   app.use(express.json());
 
-
-  
-  //app.use(
-  //  clerkMiddleware({
-  //    secretKey: process.env.//CLERK_SECRET_KEY,
-  //  })
-  //);
-
-
-
   app.use("/api", (req, _res, next) => {
     console.log(`[API] ${req.method} ${req.originalUrl}`);
     next();
@@ -36,7 +24,7 @@ async function start() {
 
   app.use("/api/auth", authRoutes);
   app.use("/api/unlock", unlockRoutes);
-
+  app.use("/api/access", accessRoutes);
 
   app.use("/api", (req, res) => {
     res.status(404).json({
