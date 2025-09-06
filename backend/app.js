@@ -1,43 +1,28 @@
-// app.js
 require("dotenv").config();
 const express = require("express");
 const connectDB = require("./services/db");
+
 const authRoutes = require("./routes/authRoutes");
-const unlockRoutes = require("./routes/unlockRoutes");
-const accessRoutes = require("./routes/accessRoutes");
+const claimRoutes = require("./routes/claimRoutes");
+const aclRoutes = require("./routes/aclRoutes");
+const userRoutes = require("./routes/userRoutes");
 
-async function start() {
-  try {
-    await connectDB();
-  } catch (err) {
-    console.error("MongoDB connect failed", err);
-    process.exit(1);
-  }
-
+(async function start() {
+  await connectDB();
   const app = express();
   app.use(express.json());
 
-  app.use("/api", (req, _res, next) => {
-    console.log(`[API] ${req.method} ${req.originalUrl}`);
-    next();
-  });
-
+  // mount – each router protects its own endpoints with verifyClerkOidc
   app.use("/api/auth", authRoutes);
-  app.use("/api/unlock", unlockRoutes);
-  app.use("/api/access", accessRoutes);
+  app.use("/api/claim", claimRoutes);
+  app.use("/api/locks", aclRoutes);
+  app.use("/api/users", userRoutes.router);
 
-  app.use("/api", (req, res) => {
-    res.status(404).json({
-      error: "API route not found",
-      method: req.method,
-      path: req.originalUrl,
-    });
-  });
+  app.use("/api/health", (_req, res) => res.json({ ok: true }));
+  app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || 5000;
   app.listen(PORT, () =>
     console.log(`Backend running on http://localhost:${PORT}`)
   );
-}
-
-start();
+})();

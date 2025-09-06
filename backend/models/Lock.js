@@ -1,16 +1,16 @@
 const mongoose = require("mongoose");
 
-const LockSchema = new mongoose.Schema({
-  lockId: { type: Number, required: true, unique: true, index: true },
-  orgId: { type: String, default: "default", index: true }, // keep simple for now
-  name: { type: String, default: "" },
-  status: {
-    type: String,
-    enum: ["unprovisioned", "provisioned"],
-    default: "provisioned",
+const LockSchema = new mongoose.Schema(
+  {
+    lockId: { type: Number, unique: true, index: true, required: true },
+    claimCodeHash: { type: String, required: true }, // sha256 hex
+    ownerAccountId: { type: String }, // Clerk user id of the admin/owner
+    claimed: { type: Boolean, default: false },
+    adminPub: { type: String }, // base64 (uncompressed P-256, 65B)
+    aclVersion: { type: Number, default: 0 },
+    aclBlob: { type: Object }, // last accepted ACL payload (for backup/audit)
   },
-  claimCode: { type: String, default: "" }, // Phase 2 will use this
-  createdAt: { type: Date, default: Date.now },
-});
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("Lock", LockSchema);
