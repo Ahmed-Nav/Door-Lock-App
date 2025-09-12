@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, Alert, TouchableOpacity, StyleSheet } from 'react-native';
-import { getUnlockToken, syncUserToBackend } from '../services/apiService';
-import { advertiseTokenBase64, stopAdvertising } from '../ble/bleManager';
+import * as Ble from '../ble/bleManager'; // Phase II BLE functions + UUIDS
 import jwtDecode from 'jwt-decode';
 import { authorize } from 'react-native-app-auth';
 import * as Keychain from 'react-native-keychain';
 import LinearGradient from 'react-native-linear-gradient';
+import axios from 'axios';
 
 const OAUTH_CONFIG = {
   clientId: '2JbPx2I2fknWbmf8',
@@ -18,14 +18,47 @@ const OAUTH_CONFIG = {
   },
 };
 
-// Choose the lock this screen targets
+// --- Phase II: choose a target lock ID you want to unlock from this screen
 const LOCK_ID = 101;
+
+// --- Your backend base URL (Phase II: we use it ONLY to sign the challenge in dev)
+const API_URL = 'https://door-lock-app.onrender.com/api';
+
+/**
+ * TEMP DEV SIGNING (Phase II scaffolding):
+ * Signs the challenge (20 bytes nonce||lockId) with the user's private key.
+ * In production you will sign ON-DEVICE using the user's key in secure enclave/keystore.
+ * For now, we call a dev endpoint so you can complete end-to-end flow.
+ *
+ * Backend should expose:
+ *   POST /api/ble/sign
+ *   headers: Authorization: Bearer <token>
+ *   body: { kid: string, msgB64: string }  // msgB64 = base64 of 20-byte challenge
+ *   returns: { sigB64: string }            // base64 of raw (r||s) 64 bytes
+ */
+async function signWithBackend(token, kid, msgUint8Array) {
+  const msgB64 = Buffer.from(msgUint8Array).toString('base64');
+  const res = await axios.post(
+    `${API_URL}/ble/sign`,
+    { kid, msgB64 },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
+    },
+  );
+  return res.data.sigB64; // must be base64 of 64B r||s
+}
 
 const UnlockScreen = () => {
   const [userEmail, setUserEmail] = useState(null);
   const [tokens, setTokens] = useState(null);
   const [status, setStatus] = useState('');
   const busyRef = useRef(false);
+  const subRef = useRef(null);
+  const deviceRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -50,6 +83,20 @@ const UnlockScreen = () => {
         console.warn('No Tokens Found', e);
       }
     })();
+
+    // cleanup on unmount
+    return () => {
+      if (subRef.current) {
+        try {
+          subRef.current.remove();
+        } catch {}
+        subRef.current = null;
+      }
+      if (deviceRef.current) {
+        deviceRef.current.cancelConnection().catch(() => {});
+        deviceRef.current = null;
+      }
+    };
   }, []);
 
   const signIn = async () => {
@@ -63,12 +110,12 @@ const UnlockScreen = () => {
         authState.accessToken ||
         authState.id_token ||
         authState.access_token;
+      console.log(rawToken);
 
       const decoded = rawToken ? jwtDecode(rawToken) : {};
       const email = decoded && decoded.email;
       if (email) setUserEmail(email);
 
-      await syncUserToBackend(rawToken);
       Alert.alert('Signed In', `Welcome ${email || ''}`);
     } catch (error) {
       console.error('Sign In Error', error);
@@ -78,11 +125,22 @@ const UnlockScreen = () => {
 
   const signOut = async () => {
     try {
+      // tear down BLE if connected
+      if (subRef.current) {
+        try {
+          subRef.current.remove();
+        } catch {}
+        subRef.current = null;
+      }
+      if (deviceRef.current) {
+        await deviceRef.current.cancelConnection().catch(() => {});
+        deviceRef.current = null;
+      }
+
       await Keychain.resetGenericPassword();
       setTokens(null);
       setUserEmail(null);
       setStatus('');
-      await stopAdvertising();
       Alert.alert('Signed Out');
     } catch (e) {
       console.warn('Sign Out Error', e);
@@ -94,41 +152,78 @@ const UnlockScreen = () => {
     busyRef.current = true;
 
     try {
-      setStatus('Sending Unlock Request...');
+      setStatus('Preparing…');
       if (!tokens) {
         Alert.alert('Please Sign In First');
         return;
       }
-
       const token =
         tokens.idToken ||
         tokens.accessToken ||
         tokens.id_token ||
         tokens.access_token;
-
       if (!token) {
         Alert.alert('Please Sign In First');
         return;
       }
-
-      // Ask backend for a token for this lock
-      const base64 = await getUnlockToken(token, LOCK_ID);
-
-      setStatus('Advertising Unlock Request...');
-      for (let i = 0; i < 5; i++) {
-        await advertiseTokenBase64(base64, 200);
+      if (!userEmail) {
+        Alert.alert('Missing user identity');
+        return;
       }
-      setStatus('Unlock Request Sent (5 frames)');
+
+      // 1) Scan & connect to the specific lockId
+      setStatus('Scanning for lock…');
+      const device = await Ble.scanAndConnectForLockId(LOCK_ID, 10_000);
+      deviceRef.current = device;
+
+      // 2) Subscribe to AUTH_RESULT to show result (ok/error)
+      if (subRef.current) {
+        try {
+          subRef.current.remove();
+        } catch {}
+      }
+      subRef.current = device.monitorCharacteristicForService(
+        Ble.UUIDS.AUTH_SERVICE,
+        Ble.UUIDS.AUTH_RESULT,
+        (error, characteristic) => {
+          if (error) {
+            setStatus(`Auth result error: ${String(error)}`);
+            return;
+          }
+          if (characteristic?.value) {
+            try {
+              const js = JSON.parse(
+                Buffer.from(characteristic.value, 'base64').toString('utf8'),
+              );
+              if (js.ok) {
+                setStatus('✅ Unlock success');
+              } else {
+                setStatus(`❌ Unlock failed: ${js.err || 'unknown'}`);
+              }
+            } catch (e) {
+              setStatus('Auth result parse error');
+            }
+          }
+        },
+      );
+
+      // 3) Perform challenge–response
+      setStatus('Exchanging challenge…');
+      await Ble.doUnlock(device, {
+        kid: userEmail, // Phase II early: we use email as kid (must match ACL)
+        signFn: async msgUint8Array => {
+          // TEMP: dev-mode: ask backend to sign with user key (so you can demo end-to-end)
+          // Replace this later with on-device signing using secure keystore.
+          return await signWithBackend(token, userEmail, msgUint8Array);
+        },
+      });
+
+      setStatus('Waiting for lock decision…');
     } catch (error) {
       console.log(error);
-      setStatus('Error Sending Unlock Request');
+      setStatus('Error during unlock');
+      Alert.alert('Unlock Error', error?.message || String(error));
     } finally {
-      try {
-        await stopAdvertising();
-        setStatus('Advertising stopped');
-      } catch (e) {
-        console.warn('Stop Advertising Failed', e);
-      }
       busyRef.current = false;
     }
   };

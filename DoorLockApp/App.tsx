@@ -1,12 +1,13 @@
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import UnlockScreen from './components/UnlockScreen';
+import SetupLockScreen from './components/SetupLockScreen';
+import PushAclScreen from './components/PushAclScreen';
 
 function App() {
 
   return (
     <SafeAreaProvider>
-      <UnlockScreen />
+      <SetupLockScreen />
     </SafeAreaProvider>
   );
 }

@@ -1,8 +1,25 @@
-# never commit secrets
-.env
-*.env
-**/.env
+# env / secrets
 backend/.env
+backend/ADMIN_PRIV.pem
+backend/ADMIN_PUB_RAW.b64
 
-# but allow templates
-!.env.example
+# node/build
+**/node_modules/
+**/dist/
+**/build/
+**/.turbo/
+**/.expo/
+
+# react native / android
+DoorLockApp/android/.cxx/
+DoorLockApp/android/.gradle/
+DoorLockApp/android/app/build/
+DoorLockApp/android/build/
+DoorLockApp/ios/build/
+DoorLockApp/ios/Pods/
+DoorLockApp/**/local.properties
+
+# editor
+.vscode/
+.idea/
+.DS_Store

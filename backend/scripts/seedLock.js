@@ -1,30 +1,29 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 const Lock = require("../models/Lock");
-const User = require("../models/User");
-const Access = require("../models/Access");
+
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
-  const lockId = 101; // pick your demo door
-  await Lock.updateOne(
-    { lockId },
-    { $set: { orgId: "default", name: "Demo Door", status: "provisioned" } },
-    { upsert: true }
-  );
+  try {
+    const lockId = Number(process.argv[2] || 101);
+    const claimCode = (process.argv[3] || "").trim() || 'ABC-123-XYZ';
 
-  const email = process.argv[2]; // pass your email: node scripts/seedLock.js you@company.com
-  if (email) {
-    const user = await User.findOne({ email });
-    if (!user) throw new Error("User not found: " + email);
-    await Access.updateOne(
-      { userId: user._id, lockId },
-      { $set: { canUnlock: true } },
-      { upsert: true }
+    await mongoose.connect(process.env.MONGODB_URI);
+
+    const claimCodeHash = crypto.createHash('sha256').update(claimCode, 'utf8').digest('hex');
+
+    const doc = await Lock.findOneAndUpdate(
+      { lockId },
+      { $set: { claimCodeHash, claimed: false, ownerAccountId: null } },
+      { upsert: true, new: true }
     );
-    console.log("Granted", email, "on lock", lockId);
-  } else {
-    console.log("Created/updated lock", lockId);
+
+    console.log('Seeded Lock:', { lockId: doc.lockId, claimCode });
+    console.log('Share this claim code with the lock owner.');
+    process.exit(0);
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
   }
-  await mongoose.disconnect();
 })();

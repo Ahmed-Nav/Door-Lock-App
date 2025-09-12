@@ -1,5 +1,6 @@
-import { BleManager } from 'react-native-ble-plx';
+import { BleManager, State } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
+import { Platform, PermissionsAndroid } from 'react-native';
 
 export const UUIDS = {
   CFG_SERVICE: '0000c0f0-0000-1000-8000-00805f9b34fb',
@@ -7,7 +8,6 @@ export const UUIDS = {
   CFG_OWNERSHIP: '0000c0f2-0000-1000-8000-00805f9b34fb',
   CFG_ACL: '0000c0f3-0000-1000-8000-00805f9b34fb',
   CFG_RESULT: '0000c0f4-0000-1000-8000-00805f9b34fb',
-
   AUTH_SERVICE: '0000a000-0000-1000-8000-00805f9b34fb',
   AUTH_CHALLENGE: '0000a001-0000-1000-8000-00805f9b34fb',
   AUTH_RESPONSE: '0000a002-0000-1000-8000-00805f9b34fb',
@@ -16,52 +16,113 @@ export const UUIDS = {
 
 const manager = new BleManager();
 
-export async function scanAndConnectForLockId(lockId, timeoutMs = 8000) {
-  return new Promise((resolve, reject) => {
-    const sub = manager.onStateChange(async s => {
-      if (s === 'PoweredOn') {
-        sub.remove();
-        const timer = setTimeout(() => {
-          manager.stopDeviceScan();
-          reject(new Error('Scan timeout'));
-        }, timeoutMs);
+/** Request runtime permissions needed for scanning */
+export async function ensureBlePermissions() {
+  if (Platform.OS !== 'android') return true;
+  const api = Platform.Version * 1;
+  try {
+    if (api >= 31) {
+      const scan = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        {
+          title: 'BLE scan permission',
+          message: 'Required to find your lock',
+          buttonPositive: 'OK',
+        },
+      );
+      const conn = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        {
+          title: 'BLE connect permission',
+          message: 'Required to connect to your lock',
+          buttonPositive: 'OK',
+        },
+      );
+      return (
+        scan === PermissionsAndroid.RESULTS.GRANTED &&
+        conn === PermissionsAndroid.RESULTS.GRANTED
+      );
+    } else {
+      const loc = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location permission',
+          message: 'Android requires location for BLE scanning',
+          buttonPositive: 'OK',
+        },
+      );
+      return loc === PermissionsAndroid.RESULTS.GRANTED;
+    }
+  } catch (e) {
+    console.warn('perm error', e);
+    return false;
+  }
+}
 
-        manager.startDeviceScan(
-          [UUIDS.CFG_SERVICE, UUIDS.AUTH_SERVICE],
-          null,
-          async (error, device) => {
-            if (error) {
+/** Scan for any “Lock-*”, connect, read CFG_STATE, match lockId, return device */
+export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
+  const ok = await ensureBlePermissions();
+  if (!ok) throw new Error('BLE permission not granted.');
+
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const finish = (err, dev) => {
+      if (finished) return;
+      finished = true;
+      try {
+        manager.stopDeviceScan();
+      } catch {}
+      err ? reject(err) : resolve(dev);
+    };
+
+    const sub = manager.onStateChange(async s => {
+      if (s !== State.PoweredOn) return;
+      sub.remove();
+
+      const timer = setTimeout(
+        () => finish(new Error('Scan timeout')),
+        timeoutMs,
+      );
+
+      // IMPORTANT: no UUID filter here — Android won’t match our 16-bit shorts
+      manager.startDeviceScan(
+        null,
+        { allowDuplicates: false },
+        async (error, device) => {
+          if (finished) return;
+          if (error) {
+            clearTimeout(timer);
+            return finish(error);
+          }
+          if (!device) return;
+
+          // Prefer the local name "Lock-<id>"
+          const name = device.name || '';
+          if (!name.startsWith('Lock-')) return;
+
+          try {
+            const d = await manager.connectToDevice(device.id, {
+              timeout: 8000,
+            });
+            await d.discoverAllServicesAndCharacteristics();
+            const st = await d.readCharacteristicForService(
+              UUIDS.CFG_SERVICE,
+              UUIDS.CFG_STATE,
+            );
+            const js = JSON.parse(
+              Buffer.from(st.value, 'base64').toString('utf8'),
+            ); // {lockId, claimed}
+            if (js.lockId === lockId) {
               clearTimeout(timer);
-              manager.stopDeviceScan();
-              reject(error);
-              return;
+              return finish(null, d);
+            } else {
+              await d.cancelConnection();
             }
-            // Optional: filter by localName like "Lock-<id>"
-            if (!device) return;
-            // We connect & read CFG_STATE to check lockId
-            try {
-              const d = await manager.connectToDevice(device.id, {
-                timeout: 7000,
-              });
-              await d.discoverAllServicesAndCharacteristics();
-              const s = await d.readCharacteristicForService(
-                UUIDS.CFG_SERVICE,
-                UUIDS.CFG_STATE,
-              );
-              const js = JSON.parse(
-                Buffer.from(s.value, 'base64').toString('utf8'),
-              );
-              if (js.lockId === lockId) {
-                clearTimeout(timer);
-                manager.stopDeviceScan();
-                resolve(d);
-              } else {
-                await d.cancelConnection();
-              }
-            } catch (_) {}
-          },
-        );
-      }
+          } catch (e) {
+            // ignore and continue scanning
+          }
+        },
+      );
     }, true);
   });
 }
@@ -77,7 +138,6 @@ export async function sendOwnershipSet(
     UUIDS.CFG_OWNERSHIP,
     value,
   );
-  // Optionally subscribe to CFG_RESULT for OK/ERR
 }
 
 export async function sendAcl(device, envelope) {
@@ -89,25 +149,4 @@ export async function sendAcl(device, envelope) {
     UUIDS.CFG_ACL,
     value,
   );
-}
-
-export async function doUnlock(device, { kid, signFn }) {
-  const ch = await device.readCharacteristicForService(
-    UUIDS.AUTH_SERVICE,
-    UUIDS.AUTH_CHALLENGE,
-  );
-  const buf = Buffer.from(ch.value, 'base64');
-  // challenge = nonce(16) | lockId(4)
-  const msg = buf; // sign whole
-  const sig64 = await signFn(msg); // returns base64 of 64B raw r||s
-
-  const body = { kid, sig: sig64 };
-  const val = Buffer.from(JSON.stringify(body), 'utf8').toString('base64');
-  await device.writeCharacteristicWithoutResponseForService(
-    UUIDS.AUTH_SERVICE,
-    UUIDS.AUTH_RESPONSE,
-    val,
-  );
-
-  // Optionally subscribe AUTH_RESULT for OK/ERR
 }
