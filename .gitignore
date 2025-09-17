@@ -2,6 +2,7 @@
 backend/.env
 backend/ADMIN_PRIV.pem
 backend/ADMIN_PUB_RAW.b64
+backend/ACL_envelope.json
 
 # node/build
 **/node_modules/
