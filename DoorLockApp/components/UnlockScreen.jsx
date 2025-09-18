@@ -16,13 +16,20 @@ import {
   sendAuthResponse,
   safeDisconnect,
 } from '../ble/bleManager';
-import { signRaw64 } from '../crypto/signP256';
+import { signRaw64, pubFromPrivB64, verifyLocal } from '../crypto/signP256';
 import { Buffer } from 'buffer';
 
+// ==== CONFIG ====
 const LOCK_ID = 101;
 const KID = 'naveed'; // must exist in ACL
+
+// Your user private key (32-byte hex) generated in doorlock-keys/user_priv.hex:
 const USER_PRIV_HEX =
-  'a9c9c793ba0388e129c3467ed863e5d4e0eae83a7ea14b945bc6450d134c79d4'; // from user_priv.hex
+  'a9c9c793ba0388e129c3467ed863e5d4e0eae83a7ea14b945bc6450d134c79d4';
+
+// The *exact* base64 pub from ACL for kid "naveed":
+const ACL_PUB_B64 =
+  'BLHyCuPXq9hEJ/2dowQ/YZdis0NbftROqVOFU3MXFPyIiTuh4iO5+8QbFlzjW3uJ5jONmMK8ItJmU4FHq6KnnMY=';
 
 export default function UnlockScreen() {
   const [status, setStatus] = useState('Idle');
@@ -49,13 +56,12 @@ export default function UnlockScreen() {
       await ensurePerms();
       device = await scanAndConnectForLockId(LOCK_ID);
 
-      // Subscribe for AUTH_RESULT before we send anything
+      // Arm AUTH_RESULT monitor first
       const resultP = waitAuthResult(device);
 
-      // Get the challenge robustly (read first, then monitor)
+      // Read one challenge (20 bytes: 16B nonce + 4B lockId BE)
       setStatus('Waiting challenge…');
-      const challenge = await getChallengeOnce(device); // Buffer length 20
-      // Optional log for debugging
+      const challenge = await getChallengeOnce(device);
       console.log(
         'challenge len=',
         challenge.length,
@@ -63,24 +69,25 @@ export default function UnlockScreen() {
         Buffer.from(challenge).toString('hex'),
       );
 
-      if (
-        !globalThis.crypto ||
-        typeof globalThis.crypto.getRandomValues !== 'function'
-      ) {
-        throw new Error(
-          'crypto.getRandomValues is missing. Did you import react-native-get-random-values in index.js?',
-        );
+      // Sanity checks: key ↔ ACL must match, and local verify must pass
+      const derivedPubB64 = pubFromPrivB64(USER_PRIV_HEX);
+      console.log('derived PUB_B64:', derivedPubB64);
+      console.log('ACL     PUB_B64:', ACL_PUB_B64);
+      if (derivedPubB64 !== ACL_PUB_B64) {
+        throw new Error('App user key does NOT match ACL pub for kid=' + KID);
       }
-      console.log('Challenge hex:', Buffer.from(challenge).toString('hex'));
-      const sigB64 = signRaw64(USER_PRIV_HEX, challenge);
-      console.log('sig b64 len:', sigB64.length); // should print 88
 
-      // Send response WITH response
+      const sigB64 = signRaw64(USER_PRIV_HEX, challenge);
+      console.log('sig b64 len:', sigB64.length); // should be 88
+      const okLocal = verifyLocal(sigB64, challenge, ACL_PUB_B64);
+      console.log('local verify:', okLocal);
+      if (!okLocal) throw new Error('Local ECDSA verify failed');
+
+      // Send response and wait for lock verdict
       setStatus('Sending response…');
       await sendAuthResponse(device, KID, sigB64);
 
-      // Wait for lock to reply on 0xA003
-      const res = await resultP;
+      const res = await resultP; // {ok:true}|{ok:false,err:"verify"}
       if (!res?.ok)
         throw new Error('Lock rejected: ' + (res?.err || 'unknown'));
 
