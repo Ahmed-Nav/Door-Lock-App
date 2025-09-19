@@ -1,37 +1,49 @@
-const router = require("express").Router();
+// backend/routes/claimRoutes.js
+const express = require("express");
 const crypto = require("crypto");
+const { connectDB } = require("../services/db");
 const Lock = require("../models/Lock");
-const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 
-router.get('/health', (_req, res) => res.json({ ok: true, router: 'claim' }));
+const router = express.Router();
 
-// POST /api/claim { lockId: number, claimCode: String }
-router.post('/', verifyClerkOidc, async (req, res) => {
+function sha256Hex(s) {
+  return crypto.createHash("sha256").update(s, "utf8").digest("hex");
+}
+function sha256B64(s) {
+  return crypto.createHash("sha256").update(s, "utf8").digest("base64");
+}
+
+router.post("/locks/:lockId/claim", async (req, res) => {
   try {
-    const { userId } = req;
-    const { lockId, claimCode } = req.body || {};
-    if (typeof lockId !== 'number' || !claimCode) {
-      return res.status(400).json({ error: 'Lock Id and Claim Code Required' });
-    }
+    await connectDB();
+    const lockId = Number(req.params.lockId);
+    const claimCode = String(req.body?.claimCode || "");
+    const adminPubB64 = String(req.body?.adminPubB64 || "");
 
-    const lock = await Lock.findOne({ lockId });
-    if (!lock) return res.status(404).json({ error: 'Lock not found' });
+    if (!lockId || !claimCode || !adminPubB64)
+      return res.status(400).json({ ok: false, err: "missing-fields" });
 
-    const h = crypto.createHash('sha256').update(claimCode, 'utf8').digest('hex');
-    if (lock.claimCodeHash !== h) return res.status(403).json({ error: 'Invalid claim code' });
+    const lock = await Lock.findOne({ lockId }).lean();
+    if (!lock)
+      return res.status(404).json({ ok: false, err: "lock-not-found" });
+    if (lock.claimed)
+      return res.status(409).json({ ok: false, err: "already-claimed" });
 
-    if(lock.claimed && lock.ownerAccountId && lock.ownerAccountId !== userId) {
-      return res.status(403).json({ error: 'Lock already claimed' });
-    }
+    const want = (lock.claimCodeHash || "").trim();
+    const gotHex = sha256Hex(claimCode);
+    const gotB64 = sha256B64(claimCode);
 
-    lock.ownerAccountId = userId;
-    lock.claimed = true;
-    await lock.save();
-    
+    const match =
+      want.toLowerCase() === gotHex.toLowerCase() ||
+      want.replace(/=+$/, "") === gotB64.replace(/=+$/, "");
+
+    if (!match) return res.status(403).json({ ok: false, err: "bad-claim" });
+
+    await Lock.updateOne({ lockId }, { $set: { claimed: true, adminPubB64 } });
+
     return res.json({ ok: true });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Server error' });
+  } catch (e) {
+    return res.status(500).json({ ok: false, err: e.message });
   }
 });
 

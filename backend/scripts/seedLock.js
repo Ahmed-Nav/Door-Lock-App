@@ -1,29 +1,39 @@
+// backend/scripts/seedLock.js
 require("dotenv").config();
-const mongoose = require("mongoose");
 const crypto = require("crypto");
+const { connectDB } = require("../services/db");
 const Lock = require("../models/Lock");
 
+function sha256Hex(s) {
+  return crypto.createHash("sha256").update(s, "utf8").digest("hex");
+}
 
 (async () => {
   try {
+    await connectDB();
+
+    // Allow override via CLI: node scripts/seedLock.js 101 ABC-123-XYZ
     const lockId = Number(process.argv[2] || 101);
-    const claimCode = (process.argv[3] || "").trim() || 'ABC-123-XYZ';
+    const claimCode = String(process.argv[3] || "ABC-123-XYZ");
 
-    await mongoose.connect(process.env.MONGODB_URI);
+    const claimCodeHash = sha256Hex(claimCode);
 
-    const claimCodeHash = crypto.createHash('sha256').update(claimCode, 'utf8').digest('hex');
-
-    const doc = await Lock.findOneAndUpdate(
+    // Upsert so re-running is idempotent
+    const res = await Lock.updateOne(
       { lockId },
-      { $set: { claimCodeHash, claimed: false, ownerAccountId: null } },
-      { upsert: true, new: true }
+      { $setOnInsert: { lockId, claimCodeHash, claimed: false } },
+      { upsert: true }
     );
 
-    console.log('Seeded Lock:', { lockId: doc.lockId, claimCode });
-    console.log('Share this claim code with the lock owner.');
+    console.log(
+      "Seed OK:",
+      res.upsertedId
+        ? `created lock ${lockId}`
+        : `lock ${lockId} already exists`
+    );
     process.exit(0);
-  } catch (error) {
-    console.error(error);
+  } catch (e) {
+    console.error(e);
     process.exit(1);
   }
 })();

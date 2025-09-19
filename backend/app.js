@@ -1,26 +1,22 @@
+// backend/app.js
 require("dotenv").config();
 const express = require("express");
-const connectDB = require("./services/db");
 const cors = require("cors");
-const morgan = require("morgan");
+const bodyParser = require("body-parser");
 
-const authRoutes = require("./routes/authRoutes");
+const authRoutes = require("./routes/authRoutes"); // keep if present
 const claimRoutes = require("./routes/claimRoutes");
-
+const aclRoutes = require("./routes/aclRoutes");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
-app.use(morgan("dev"));
-  // mount – each router protects its own endpoints with verifyClerkOidc
+app.use(bodyParser.json());
 
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.use("/auth", authRoutes);
+app.use("/", claimRoutes);
+app.use("/", aclRoutes);
 
-  app.use("/api/auth", authRoutes);
-  app.use("/api/claim", claimRoutes);
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
-
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () =>
-    console.log(`Backend running on http://localhost:${PORT}`)
-  );
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log("backend on :" + PORT));

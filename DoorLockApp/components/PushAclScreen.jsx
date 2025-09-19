@@ -1,3 +1,4 @@
+// components/PushAclScreen.jsx
 import React, { useState } from 'react';
 import {
   View,
@@ -10,60 +11,64 @@ import {
   Platform,
 } from 'react-native';
 import { scanAndConnectForLockId, sendAcl } from '../ble/bleManager';
+import { fetchLatestAcl } from '../services/apiService';
 
 export default function PushAclScreen() {
-
   const [lockId, setLockId] = useState('101');
-  const [text, setText] = useState(`{
-  "sig": "iZVXtdzHZ5uGQ5q6+zbq3gF2yJ95QQQn8MJSe4yIZI9mJ41IaTKC44vMUc9+Uj8BfW3cwpphV7/79azBHAbO2w==",
-  "payload": {
-    "lockId": 101,
-    "version": 2,
-    "users": [
-      {
-        "kid": "naveed",
-        "pub": "BLHyCuPXq9hEJ/2dowQ/YZdis0NbftROqVOFU3MXFPyIiTuh4iO5+8QbFlzjW3uJ5jONmMK8ItJmU4FHq6KnnMY="
-      }
-    ]
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState('Idle');
+
+  async function ensurePermissions() {
+    if (Platform.OS !== 'android') return;
+    const perms = [
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+    ];
+    if (Platform.Version < 31) {
+      perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+    }
+    for (const p of perms) {
+      const g = await PermissionsAndroid.request(p);
+      if (g !== PermissionsAndroid.RESULTS.GRANTED)
+        throw new Error(`Missing permission: ${p}`);
+    }
   }
-}
-`);
-  const [status, setStatus] =
-    useState('Idle');
 
-    async function ensurePermissions() {
-      if (Platform.OS !== 'android') return;
-      const perms = [
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-      ];
-      if (Platform.Version <31) {
-        perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-      }
-      for (const p of perms) {
-        const g = await PermissionsAndroid.request(p);
-        if (g !== PermissionsAndroid.RESULTS.GRANTED) throw new Error(`Missing permission: ${p}`);
-      }
+  const getFromServer = async () => {
+    try {
+      setStatus('Downloading ACL…');
+      const data = await fetchLatestAcl(Number(lockId));
+      if (!data?.ok || !data?.envelope) throw new Error('no-acl');
+      setText(JSON.stringify(data.envelope, null, 2));
+      setStatus('Downloaded');
+      Alert.alert('OK', 'Latest ACL downloaded from server.');
+    } catch (e) {
+      setStatus('Download failed');
+      Alert.alert('Error', String(e?.message || e));
     }
+  };
 
-    const push = async () => {
-      try {
-        if (!text.trim()) { Alert.alert('Paste ACL envelope JSON first'); return; }
-        setStatus('Scanning...');
-        await ensurePermissions();
-        const envelope = JSON.parse(text);
-        const device = await scanAndConnectForLockId(Number(lockId));
-        setStatus('Sending ACL...');
-        await sendAcl(device, envelope);
-        await device.cancelConnection();
-        setStatus('ACL Sent');
-        Alert.alert('ACL Sent');
-      } catch (error) {
-        console.log(error);
-        setStatus('ACL Failed');
-        Alert.alert('ACL Failed', String(error?.message || error));
+  const push = async () => {
+    try {
+      if (!text.trim()) {
+        Alert.alert('Paste or fetch ACL envelope first');
+        return;
       }
+      setStatus('Scanning…');
+      await ensurePermissions();
+      const envelope = JSON.parse(text);
+      const device = await scanAndConnectForLockId(Number(lockId));
+      setStatus('Sending ACL…');
+      await sendAcl(device, envelope);
+      await device.cancelConnection();
+      setStatus('ACL Sent');
+      Alert.alert('ACL Sent');
+    } catch (error) {
+      console.log(error);
+      setStatus('ACL Failed');
+      Alert.alert('ACL Failed', String(error?.message || error));
     }
+  };
 
   return (
     <View style={s.c}>
@@ -75,20 +80,31 @@ export default function PushAclScreen() {
         placeholder="Lock ID"
         keyboardType="numeric"
       />
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={getFromServer}>
+          <Text style={s.btxt}>Get Latest From Server</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.btn, { backgroundColor: '#7B1FA2', flex: 1 }]}
+          onPress={push}
+        >
+          <Text style={s.btxt}>Send to Lock</Text>
+        </TouchableOpacity>
+      </View>
+
       <TextInput
         style={s.box}
         value={text}
         onChangeText={setText}
-        placeholder="Paste ACL_envelope.json here"
+        placeholder="ACL_envelope.json"
         multiline
       />
-      <TouchableOpacity style={s.btn} onPress={push}>
-        <Text style={s.btxt}>Send to Lock</Text>
-      </TouchableOpacity>
       <Text style={s.status}>Status: {status}</Text>
     </View>
   );
 }
+
 const s = StyleSheet.create({
   c: { flex: 1, padding: 16, gap: 12, backgroundColor: '#0b0b0f' },
   t: { color: 'white', fontSize: 20, fontWeight: '700' },
@@ -107,7 +123,7 @@ const s = StyleSheet.create({
     textAlignVertical: 'top',
   },
   btn: {
-    backgroundColor: '#7B1FA2',
+    backgroundColor: '#444',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
