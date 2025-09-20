@@ -1,13 +1,13 @@
-const mongoose = require('mongoose');
+// backend/models/AclVersion.js
+const mongoose = require("mongoose");
 
 const AclVersionSchema = new mongoose.Schema(
   {
     lockId: { type: Number, index: true, required: true },
     version: { type: Number, index: true, required: true },
-    payloadJson: { type: String, required: true },
-    sigB64: { type: String, required: true },
+    envelope: { type: Object, required: true },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('AclVersion', AclVersionSchema);
+module.exports = mongoose.model("AclVersion", AclVersionSchema);

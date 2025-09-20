@@ -18,10 +18,13 @@ router.post("/locks/:lockId/claim", async (req, res) => {
     await connectDB();
     const lockId = Number(req.params.lockId);
     const claimCode = String(req.body?.claimCode || "");
-    const adminPubB64 = String(req.body?.adminPubB64 || "");
+    const adminPubB64 = req.body?.adminPubB64
+      ? String(req.body.adminPubB64)
+      : null;
 
-    if (!lockId || !claimCode || !adminPubB64)
+    if (!lockId || !claimCode) {
       return res.status(400).json({ ok: false, err: "missing-fields" });
+    }
 
     const lock = await Lock.findOne({ lockId }).lean();
     if (!lock)
@@ -39,8 +42,10 @@ router.post("/locks/:lockId/claim", async (req, res) => {
 
     if (!match) return res.status(403).json({ ok: false, err: "bad-claim" });
 
-    await Lock.updateOne({ lockId }, { $set: { claimed: true, adminPubB64 } });
+    const update = { claimed: true };
+    if (adminPubB64) update.adminPubB64 = adminPubB64;
 
+    await Lock.updateOne({ lockId }, { $set: update });
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, err: e.message });
