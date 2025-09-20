@@ -136,20 +136,41 @@ export async function sendOwnershipSet(
 }
 
 export async function sendAcl(device, envelope) {
-  const value = Buffer.from(JSON.stringify(envelope), 'utf8').toString(
-    'base64',
-  );
+  // 1) Preflight on the phone (cheap, instant feedback)
+  const sigLen = Buffer.from(String(envelope?.sig || ''), 'base64').length;
+  if (sigLen !== 64)
+    throw new Error('ACL envelope sig must be 64 bytes (base64 r||s)');
+
+  const users = envelope?.payload?.users || [];
+  for (const u of users) {
+    const pub = Buffer.from(String(u?.pub || ''), 'base64');
+    if (pub.length !== 65 || pub[0] !== 0x04) {
+      throw new Error(
+        `User "${u?.kid || '?'}" pub must be 65 bytes uncompressed (0x04...)`,
+      );
+    }
+  }
+
+  // 2) Prepare the base64 of the WHOLE JSON envelope
+  const json = JSON.stringify(envelope);
+  let value = Buffer.from(json, 'utf8').toString('base64');
+
+  // 3) Belt & suspenders: remove any non-base64 chars (e.g. CR/LF/spaces)
+  value = value.replace(/[^A-Za-z0-9+/=]/g, '');
+
   const waiter = waitForCfgResult(device);
-  await sleep(150);
+  await sleep(150); // ensure CCCD for CFG_RESULT is armed
   await device.writeCharacteristicWithResponseForService(
     UUIDS.CFG_SERVICE,
     UUIDS.CFG_ACL,
     value,
   );
-  const res = await waiter;
+
+  const res = await waiter; // { ok:true } or { ok:false, err:... }
   if (!res?.ok) throw new Error('ACL failed: ' + (res?.err || 'unknown'));
   return res;
 }
+
 
 // -------------------- Phase III helpers --------------------
 export async function getChallengeOnce(device, timeoutMs = 5000) {

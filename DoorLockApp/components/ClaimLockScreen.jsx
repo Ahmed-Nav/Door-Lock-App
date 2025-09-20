@@ -84,7 +84,10 @@ export default function ClaimLockScreen() {
       // From here you can switch to your Ownership BLE flow if you want to do it right away.
     } catch (error) {
       setStatus('Claim Failed');
-      Alert.alert('Claim Error', String(error?.message || error));
+      const st = error?.response?.status;
+      const err = error?.response?.data?.err;
+      const msg = st === 409 ? 'This lock is already claimed.' : st === 403 ? 'Wrong claim code.' : st === 404 ? 'Lock not found.' : st === 400 ? 'Missing fields.' : err || error?.message || 'Something went wrong.';
+      Alert.alert('Claim Failed', msg);
     }
   };
 
