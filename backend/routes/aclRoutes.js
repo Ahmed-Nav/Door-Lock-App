@@ -2,7 +2,7 @@ const express = require("express");
 const { connectDB } = require("../services/db");
 const AclVersion = require("../models/AclVersion");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/roles");
+const { requireAdmin } = require("../middleware/requireRole");
 
 const router = express.Router();
 

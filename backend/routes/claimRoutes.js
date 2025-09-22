@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const { connectDB } = require("../services/db");
 const Lock = require("../models/Lock");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/roles");
+const { requireAdmin } = require("../middleware/requireRole");
 
 const router = express.Router();
 
