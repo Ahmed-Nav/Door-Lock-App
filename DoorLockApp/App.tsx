@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import RoleSelectScreen from './auth/RoleSelectScreen';
-import SignInScreen from './auth/SignInScreen';
+import RoleSelectScreen from './components/RoleSelectScreen';
+import SignInScreen from './components/SignInScreen';
 
 // Your existing screens
 import ClaimLockScreen from './components/ClaimLockScreen';

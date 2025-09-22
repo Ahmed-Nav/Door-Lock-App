@@ -2,12 +2,12 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { authorize } from 'react-native-app-auth';
 import * as Keychain from 'react-native-keychain';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import { syncUserToBackend } from '../services/apiService';
 
 const OAUTH_CONFIGS = {
   user: {
-    clientId: '<<CLERK_USER_CLIENT_ID>>',
+    clientId: '2JbPx2I2fknWbmf8',
     redirectUrl: 'com.doorlockapp://callback',
     scopes: ['openid', 'email', 'profile'],
     serviceConfiguration: {
@@ -17,7 +17,7 @@ const OAUTH_CONFIGS = {
     },
   },
   admin: {
-    clientId: '<<CLERK_ADMIN_CLIENT_ID>>',
+    clientId: '5si8xSwPl6n2oQLY',
     redirectUrl: 'com.doorlockapp://callback',
     scopes: ['openid', 'email', 'profile'],
     serviceConfiguration: {
@@ -38,6 +38,7 @@ export default function SignInScreen({ route, navigation }) {
       const raw =
         auth.idToken || auth.accessToken || auth.id_token || auth.access_token;
       if (!raw) throw new Error('No token from provider');
+      console.log(raw);
 
       await Keychain.setGenericPassword('clerk', JSON.stringify(auth));
       await setToken(raw);

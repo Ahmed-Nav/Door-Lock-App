@@ -1,48 +1,48 @@
+// backend/routes/authRoutes.js
 const router = require("express").Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
+const { connectDB } = require("../services/db");
 const User = require("../models/User");
 
 router.get("/health", (_req, res) => res.json({ ok: true, router: "auth" }));
 
-// POST /api/auth/sync  — call right after login
-router.post("/sync", verifyClerkOidc, async (req, res) => {
+// Upsert + return current user (role-aware)
+router.get("/me", verifyClerkOidc, async (req, res) => {
   try {
-    const { userId, userEmail, role } = req;
-    const now = new Date();
+    await connectDB();
+    const { userId, userEmail } = req;
     const doc = await User.findOneAndUpdate(
       { clerkId: userId },
-      {
-        $setOnInsert: {
-          clerkId: userId,
-          email: userEmail,
-          role,
-          createdAt: now,
-        },
-        $set: { email: userEmail, role, updatedAt: now },
-      },
+      { $setOnInsert: { clerkId: userId, email: userEmail, role: "user" } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     res.json({
       ok: true,
-      user: { id: String(doc._id), email: doc.email, role: doc.role },
+      user: { id: doc._id.toString(), email: doc.email, role: doc.role },
     });
   } catch (e) {
-    res.status(500).json({ ok: false, err: e.message });
+    console.error("GET /auth/me failed:", e);
+    res.status(500).json({ ok: false, err: "server-error" });
   }
 });
 
-// GET /api/auth/me — validate token, return current user
-router.get("/me", verifyClerkOidc, async (req, res) => {
+// (Optional) If you still keep /auth/sync, make it DB-safe too
+router.post("/sync", verifyClerkOidc, async (req, res) => {
   try {
-    const doc = await User.findOne({ clerkId: req.userId }).lean();
+    await connectDB();
+    const { userId, userEmail } = req;
+    const doc = await User.findOneAndUpdate(
+      { clerkId: userId },
+      { $setOnInsert: { clerkId: userId, email: userEmail, role: "user" } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
     res.json({
       ok: true,
-      user: doc
-        ? { id: String(doc._id), email: doc.email, role: doc.role }
-        : null,
+      user: { id: doc._id.toString(), email: doc.email, role: doc.role },
     });
   } catch (e) {
-    res.status(500).json({ ok: false, err: e.message });
+    console.error("POST /auth/sync failed:", e);
+    res.status(500).json({ ok: false, err: "server-error" });
   }
 });
 
