@@ -4,9 +4,8 @@ const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { connectDB } = require("../services/db");
 const User = require("../models/User");
 
-router.get("/health", (_req, res) => res.json({ ok: true, router: "auth" }));
+router.get("/health", (_req, res) => res.json({ ok: true }));
 
-// Upsert + return current user (role-aware)
 router.get("/me", verifyClerkOidc, async (req, res) => {
   try {
     await connectDB();
@@ -26,7 +25,6 @@ router.get("/me", verifyClerkOidc, async (req, res) => {
   }
 });
 
-// (Optional) If you still keep /auth/sync, make it DB-safe too
 router.post("/sync", verifyClerkOidc, async (req, res) => {
   try {
     await connectDB();

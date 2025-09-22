@@ -1,50 +1,98 @@
-import React, { useEffect } from 'react';
+// App.tsx
+import 'react-native-gesture-handler';
+import 'react-native-get-random-values';
+import { Buffer } from 'buffer';
+global.Buffer = global.Buffer || Buffer;
+
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { AuthProvider, useAuth } from './auth/AuthContext';
+
 import RoleSelectScreen from './components/RoleSelectScreen';
 import SignInScreen from './components/SignInScreen';
-
-// Your existing screens
 import ClaimLockScreen from './components/ClaimLockScreen';
 import PushAclScreen from './components/PushAclScreen';
+import UnlockScreen from './components/UnlockScreen';
 
-const Stack = createNativeStackNavigator();
+import { getMe } from './services/apiService';
+import jwtDecode from 'jwt-decode';
+import * as Keychain from 'react-native-keychain';
 
-function AdminHome() {
-  // add admin tabs later; for now show Push ACL here
-  return <PushAclScreen />;
-}
-function UserHome() {
-  // show user features (claim/unlock)
-  return <ClaimLockScreen />;
-}
+type RootStackParamList = {
+  RoleSelect: undefined;
+  SignIn: { role: 'admin' | 'user' };
+  AdminHome: undefined;
+  ClaimLock: undefined;
+  PushACL: undefined;
+  UserHome: undefined;
+  Unlock: undefined;
+};
 
-function Root() {
-  const { token, refreshMe } = useAuth();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-  // Optional “remember me”: if token exists from previous run, fetch me and auto-route.
-  useEffect(() => { if (token) refreshMe(); }, [token, refreshMe]);
-
+function Loading() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown:false }}>
-      {/* Auth flow (always start here) */}
-      <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
-      <Stack.Screen name="SignIn" component={SignInScreen} />
-
-      {/* After login, we reset to one of these */}
-      <Stack.Screen name="AdminHome" component={AdminHome} />
-      <Stack.Screen name="UserHome" component={UserHome} />
-    </Stack.Navigator>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b0b0f' }}>
+      <ActivityIndicator size="large" />
+    </View>
   );
 }
 
 export default function App() {
+  const [booting, setBooting] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [role, setRole] = useState<'admin' | 'user' | null>(null);
+
+  // On boot: try restore token → fetch /auth/me → set role
+  useEffect(() => {
+    (async () => {
+      try {
+        const creds = await Keychain.getGenericPassword();
+        if (!creds) { setBooting(false); return; }
+        const auth = JSON.parse(creds.password || '{}');
+        const raw: string | undefined =
+          auth.idToken || auth.id_token || auth.accessToken || auth.access_token;
+
+        if (!raw) { setBooting(false); return; }
+
+        setToken(raw);
+        // This upserts user (so you see a user doc in DB) and gives us role
+        const me = await getMe(raw);
+        const r = me?.user?.role === 'admin' ? 'admin' : 'user';
+        setRole(r);
+      } catch (e) {
+        console.warn('Boot getMe failed:', e?.response?.data || String(e));
+      } finally {
+        setBooting(false);
+      }
+    })();
+  }, []);
+
+  if (booting) return <Loading />;
+
   return (
-    <AuthProvider>
-      <NavigationContainer>
-        <Root />
-      </NavigationContainer>
-    </AuthProvider>
+    <NavigationContainer>
+      {!token ? (
+        // Not signed in: Auth flow
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
+          <Stack.Screen name="SignIn" component={SignInScreen} />
+        </Stack.Navigator>
+      ) : role === 'admin' ? (
+        // Admin flow
+        <Stack.Navigator>
+          {/* Make ClaimLock the admin landing or create a dedicated AdminHome screen */}
+          <Stack.Screen name="ClaimLock" component={ClaimLockScreen} options={{ title: 'Claim a Lock' }} />
+          <Stack.Screen name="PushACL" component={PushAclScreen} options={{ title: 'Push ACL' }} />
+          {/* add Groups, etc. here later */}
+        </Stack.Navigator>
+      ) : (
+        // User flow
+        <Stack.Navigator>
+          <Stack.Screen name="Unlock" component={UnlockScreen} options={{ title: 'Unlock' }} />
+        </Stack.Navigator>
+      )}
+    </NavigationContainer>
   );
 }
