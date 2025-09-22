@@ -1,13 +1,12 @@
 // backend/routes/adminRoutes.js
 const router = require("express").Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const requireRole = require("../middleware/requireRole");
+const { requireAdmin } = require("../middleware/requireRole");
 const { buildAndStore } = require("../services/aclBuildService");
 
 router.post(
   "/locks/:lockId/acl/rebuild",
-  verifyClerkOidc,
-  requireRole("admin"),
+  verifyClerkOidc, requireAdmin,
   async (req, res) => {
     const lockId = Number(req.params.lockId);
     if (!lockId) return res.status(400).json({ ok: false, err: "bad-lockId" });
