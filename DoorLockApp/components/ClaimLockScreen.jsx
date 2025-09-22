@@ -13,8 +13,19 @@ import * as Keychain from 'react-native-keychain';
 import jwtDecode from 'jwt-decode';
 import { syncUserToBackend, claimLockOnServer } from '../services/apiService';
 
-const OAUTH_CONFIG = {
-  clientId: '2JbPx2I2fknWbmf8',
+const OAUTH_USER = {
+  clientId: 'USER_CLIENT_ID_HERE', // <-- put your USER clientId
+  redirectUrl: 'com.doorlockapp://callback',
+  scopes: ['openid', 'email', 'profile'],
+  serviceConfiguration: {
+    authorizationEndpoint:
+      'https://moving-ferret-78.clerk.accounts.dev/oauth/authorize',
+    tokenEndpoint: 'https://moving-ferret-78.clerk.accounts.dev/oauth/token',
+  },
+};
+
+const OAUTH_ADMIN = {
+  clientId: 'ADMIN_CLIENT_ID_HERE', // <-- put your ADMIN clientId
   redirectUrl: 'com.doorlockapp://callback',
   scopes: ['openid', 'email', 'profile'],
   serviceConfiguration: {
@@ -51,55 +62,92 @@ export default function ClaimLockScreen() {
     })();
   }, []);
 
-  const signIn = async () => {
+  const signInAdmin = async () => {
     try {
-      const auth = await authorize(OAUTH_CONFIG);
+      const auth = await authorize(OAUTH_ADMIN);
       setTokens(auth);
       await Keychain.setGenericPassword('clerk', JSON.stringify(auth));
       const raw =
         auth.idToken || auth.accessToken || auth.id_token || auth.access_token;
       const d = raw ? jwtDecode(raw) : null;
       setEmail(d?.email || null);
-
-      // Optional, only if your backend still needs it
       try {
         if (raw) await syncUserToBackend(raw);
       } catch {}
-      Alert.alert('Signed In', `Welcome ${d?.email || ''}`);
-    } catch (error) {
-      Alert.alert('Sign In Error', String(error?.message || error));
+      Alert.alert('Signed In', `Admin: ${d?.email || ''}`);
+    } catch (e) {
+      Alert.alert('Sign In Error', String(e?.message || e));
+    }
+  };
+
+  const signInUser = async () => {
+    try {
+      const auth = await authorize(OAUTH_USER);
+      setTokens(auth);
+      await Keychain.setGenericPassword('clerk', JSON.stringify(auth));
+      const raw =
+        auth.idToken || auth.accessToken || auth.id_token || auth.access_token;
+      const d = raw ? jwtDecode(raw) : null;
+      setEmail(d?.email || null);
+      try {
+        if (raw) await syncUserToBackend(raw);
+      } catch {}
+      Alert.alert('Signed In', `User: ${d?.email || ''}`);
+    } catch (e) {
+      Alert.alert('Sign In Error', String(e?.message || e));
     }
   };
 
   const doClaim = async () => {
     try {
+      const raw =
+        tokens?.idToken ||
+        tokens?.accessToken ||
+        tokens?.id_token ||
+        tokens?.access_token;
+      if (!raw) return Alert.alert('Not signed in', 'Sign in as admin.');
       setStatus('Claiming on server…');
-      const res = await claimLockOnServer({
+
+      const res = await claimLockOnServer(raw, {
         lockId: Number(lockId),
         claimCode,
       });
+
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
       setStatus('Claimed');
-      Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
-      // From here you can switch to your Ownership BLE flow if you want to do it right away.
+      Alert.alert('Claimed', `Lock ${lockId} claimed.`);
     } catch (error) {
       setStatus('Claim Failed');
-      const st = error?.response?.status;
-      const err = error?.response?.data?.err;
-      const msg = st === 409 ? 'This lock is already claimed.' : st === 403 ? 'Wrong claim code.' : st === 404 ? 'Lock not found.' : st === 400 ? 'Missing fields.' : err || error?.message || 'Something went wrong.';
-      Alert.alert('Claim Failed', msg);
+      const err = String(error?.response?.data?.err || error?.message || error);
+      const friendly =
+        err === 'already-claimed'
+          ? 'This lock is already claimed.'
+          : err === 'bad-claim'
+          ? 'Claim code is incorrect.'
+          : err === 'lock-not-found'
+          ? 'Lock not found.'
+          : err === 'forbidden'
+          ? 'Admins only.'
+          : err;
+      Alert.alert('Claim Error', friendly);
     }
   };
 
   return (
     <View style={s.c}>
-      <Text style={s.t}>Claim a Lock</Text>
+      <Text style={s.t}>Claim a Lock (Admin only)</Text>
       <Text style={s.label}>
         {email ? `Signed in as ${email}` : 'Not signed in'}
       </Text>
-      <TouchableOpacity style={s.btn} onPress={signIn}>
-        <Text style={s.bt}>Sign In</Text>
-      </TouchableOpacity>
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={signInUser}>
+          <Text style={s.bt}>Sign In (User)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={signInAdmin}>
+          <Text style={s.bt}>Sign In (Admin)</Text>
+        </TouchableOpacity>
+      </View>
 
       <TextInput
         style={s.in}
@@ -114,6 +162,7 @@ export default function ClaimLockScreen() {
         value={claimCode}
         onChangeText={setClaimCode}
       />
+
       <TouchableOpacity
         style={[s.btn, { backgroundColor: '#7B1FA2' }]}
         onPress={doClaim}

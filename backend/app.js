@@ -7,6 +7,8 @@ const bodyParser = require("body-parser");
 const authRoutes = require("./routes/authRoutes");
 const claimRoutes = require("./routes/claimRoutes");
 const aclRoutes = require("./routes/aclRoutes");
+const groupRoutes = require("./routes/groupRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 app.use(cors());
@@ -16,6 +18,8 @@ app.use(bodyParser.json());
 app.use("/api/auth", authRoutes);
 app.use("/api", claimRoutes);
 app.use("/api", aclRoutes);
+app.use("/api", groupRoutes);
+app.use("/api", adminRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
