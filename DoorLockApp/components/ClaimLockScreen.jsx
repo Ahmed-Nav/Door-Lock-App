@@ -1,5 +1,5 @@
-// components/ClaimLockScreen.jsx
-import React, { useEffect, useState } from 'react';
+// DoorLockApp/components/ClaimLockScreen.jsx
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,146 +8,41 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { authorize } from 'react-native-app-auth';
-import * as Keychain from 'react-native-keychain';
-import jwtDecode from 'jwt-decode';
-import { syncUserToBackend, claimLockOnServer } from '../services/apiService';
-
-const OAUTH_USER = {
-  clientId: 'USER_CLIENT_ID_HERE', // <-- put your USER clientId
-  redirectUrl: 'com.doorlockapp://callback',
-  scopes: ['openid', 'email', 'profile'],
-  serviceConfiguration: {
-    authorizationEndpoint:
-      'https://moving-ferret-78.clerk.accounts.dev/oauth/authorize',
-    tokenEndpoint: 'https://moving-ferret-78.clerk.accounts.dev/oauth/token',
-  },
-};
-
-const OAUTH_ADMIN = {
-  clientId: 'ADMIN_CLIENT_ID_HERE', // <-- put your ADMIN clientId
-  redirectUrl: 'com.doorlockapp://callback',
-  scopes: ['openid', 'email', 'profile'],
-  serviceConfiguration: {
-    authorizationEndpoint:
-      'https://moving-ferret-78.clerk.accounts.dev/oauth/authorize',
-    tokenEndpoint: 'https://moving-ferret-78.clerk.accounts.dev/oauth/token',
-  },
-};
+import { useAuth } from '../context/AuthContext';
+import { claimLockOnServer } from '../services/apiService';
 
 export default function ClaimLockScreen() {
-  const [email, setEmail] = useState(null);
-  const [tokens, setTokens] = useState(null);
+  const { token, role, email } = useAuth();
   const [lockId, setLockId] = useState('101');
   const [claimCode, setClaimCode] = useState('ABC-123-XYZ');
   const [status, setStatus] = useState('Idle');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const creds = await Keychain.getGenericPassword();
-        if (!creds) return;
-        const auth = JSON.parse(creds.password);
-        setTokens(auth);
-        const raw =
-          auth.idToken ||
-          auth.accessToken ||
-          auth.id_token ||
-          auth.access_token;
-        if (raw) {
-          const d = jwtDecode(raw);
-          setEmail(d?.email || null);
-        }
-      } catch {}
-    })();
-  }, []);
-
-  const signInAdmin = async () => {
-    try {
-      const auth = await authorize(OAUTH_ADMIN);
-      setTokens(auth);
-      await Keychain.setGenericPassword('clerk', JSON.stringify(auth));
-      const raw =
-        auth.idToken || auth.accessToken || auth.id_token || auth.access_token;
-      const d = raw ? jwtDecode(raw) : null;
-      setEmail(d?.email || null);
-      try {
-        if (raw) await syncUserToBackend(raw);
-      } catch {}
-      Alert.alert('Signed In', `Admin: ${d?.email || ''}`);
-    } catch (e) {
-      Alert.alert('Sign In Error', String(e?.message || e));
-    }
-  };
-
-  const signInUser = async () => {
-    try {
-      const auth = await authorize(OAUTH_USER);
-      setTokens(auth);
-      await Keychain.setGenericPassword('clerk', JSON.stringify(auth));
-      const raw =
-        auth.idToken || auth.accessToken || auth.id_token || auth.access_token;
-      const d = raw ? jwtDecode(raw) : null;
-      setEmail(d?.email || null);
-      try {
-        if (raw) await syncUserToBackend(raw);
-      } catch {}
-      Alert.alert('Signed In', `User: ${d?.email || ''}`);
-    } catch (e) {
-      Alert.alert('Sign In Error', String(e?.message || e));
-    }
-  };
-
   const doClaim = async () => {
     try {
-      const raw =
-        tokens?.idToken ||
-        tokens?.accessToken ||
-        tokens?.id_token ||
-        tokens?.access_token;
-      if (!raw) return Alert.alert('Not signed in', 'Sign in as admin.');
+      if (role !== 'admin') {
+        Alert.alert('Forbidden', 'Only Admins can claim locks.');
+        return;
+      }
       setStatus('Claiming on server…');
-
-      const res = await claimLockOnServer(raw, {
+      const res = await claimLockOnServer(token, {
         lockId: Number(lockId),
         claimCode,
       });
-
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
       setStatus('Claimed');
-      Alert.alert('Claimed', `Lock ${lockId} claimed.`);
-    } catch (error) {
+      Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
+    } catch (e) {
       setStatus('Claim Failed');
-      const err = String(error?.response?.data?.err || error?.message || error);
-      const friendly =
-        err === 'already-claimed'
-          ? 'This lock is already claimed.'
-          : err === 'bad-claim'
-          ? 'Claim code is incorrect.'
-          : err === 'lock-not-found'
-          ? 'Lock not found.'
-          : err === 'forbidden'
-          ? 'Admins only.'
-          : err;
-      Alert.alert('Claim Error', friendly);
+      Alert.alert('Claim Error', String(e?.message || e));
     }
   };
 
   return (
     <View style={s.c}>
-      <Text style={s.t}>Claim a Lock (Admin only)</Text>
+      <Text style={s.t}>Claim a Lock</Text>
       <Text style={s.label}>
-        {email ? `Signed in as ${email}` : 'Not signed in'}
+        {email ? `Signed in as ${email} (${role})` : 'Not signed in'}
       </Text>
-
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={signInUser}>
-          <Text style={s.bt}>Sign In (User)</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={signInAdmin}>
-          <Text style={s.bt}>Sign In (Admin)</Text>
-        </TouchableOpacity>
-      </View>
 
       <TextInput
         style={s.in}

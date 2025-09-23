@@ -1,41 +1,47 @@
+// DoorLockApp/screens/RoleSelectScreen.tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 
-export default function RoleSelectScreen({ navigation }) {
+export default function RoleSelectScreen() {
+  const { signInAdmin, signInUser } = useAuth();
+
   return (
     <View style={s.c}>
-      <Text style={s.t}>Sign in as…</Text>
-      <TouchableOpacity
-        style={s.btn}
-        onPress={() => navigation.navigate('SignIn', { role: 'user' })}
-      >
-        <Text style={s.bt}>User</Text>
-      </TouchableOpacity>
+      <Text style={s.t}>Sign in as</Text>
       <TouchableOpacity
         style={[s.btn, { backgroundColor: '#7B1FA2' }]}
-        onPress={() => navigation.navigate('SignIn', { role: 'admin' })}
+        onPress={signInAdmin}
       >
         <Text style={s.bt}>Admin</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={s.btn} onPress={signInUser}>
+        <Text style={s.bt}>User</Text>
       </TouchableOpacity>
     </View>
   );
 }
+
 const s = StyleSheet.create({
   c: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
+    gap: 12,
+    padding: 16,
     backgroundColor: '#0b0b0f',
-    padding: 24,
+    justifyContent: 'center',
   },
-  t: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 8 },
+  t: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
   btn: {
     backgroundColor: '#444',
-    padding: 16,
-    borderRadius: 12,
-    width: '80%',
+    padding: 14,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  bt: { color: '#fff', fontWeight: '700' },
+  bt: { color: 'white', fontWeight: '600' },
 });
