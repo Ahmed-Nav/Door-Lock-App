@@ -1,7 +1,7 @@
-// DoorLockApp/screens/RoleSelectScreen.tsx
+// DoorLockApp/components/RoleSelectScreen.tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 
 export default function RoleSelectScreen() {
   const { signInAdmin, signInUser } = useAuth();

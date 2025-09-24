@@ -29,8 +29,11 @@ export const rebuildAcl = async (token, lockId) => {
   return r.data;
 };
 
-export const fetchLatestAcl = async lockId => {
-  const r = await axios.get(`${API_URL}/locks/${lockId}/acl/latest`);
+export const fetchLatestAcl = async (token, lockId) => {
+  const r = await axios.get(`${API_URL}/locks/${lockId}/acl/latest`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }
+);
   return r.data;
 };
 

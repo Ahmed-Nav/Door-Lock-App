@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import { claimLockOnServer } from '../services/apiService';
 
 export default function ClaimLockScreen() {
@@ -33,7 +33,14 @@ export default function ClaimLockScreen() {
       Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
     } catch (e) {
       setStatus('Claim Failed');
-      Alert.alert('Claim Error', String(e?.message || e));
+      const err = e?.response?.data?.err || e?.message;
+      if (err === 'already-claimed') {
+        Alert.alert('Already claimed', 'This lock has already been claimed.');
+      } else if (err === 'bad-claim') {
+        Alert.alert('Invalid code', 'The claim code is incorrect.');
+      } else {
+        Alert.alert('Claim failed', String(err));
+      }
     }
   };
 

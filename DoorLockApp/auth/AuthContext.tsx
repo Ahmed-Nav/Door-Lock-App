@@ -1,70 +1,145 @@
-// DoorLockApp/context/AuthContext.tsx
-import React, { createContext, useContext, useState, useMemo } from 'react';
-import { authorize, AuthorizeResult } from 'react-native-app-auth';
+// DoorLockApp/auth/AuthContext.tsx
+import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
+import { authorize } from 'react-native-app-auth';
+import jwtDecode from 'jwt-decode';
 import * as Keychain from 'react-native-keychain';
 import { getMe } from '../services/apiService';
 
 type Role = 'admin' | 'user' | null;
-type AuthState = { token: string|null; role: Role; email: string|null; loading: boolean };
-type Ctx = AuthState & {
-  signIn: (role: Exclude<Role, null>) => Promise<void>;
+
+type AuthState = {
+  token: string | null;
+  role: Role;
+  email: string | null;
+  loading: boolean;
+  signInAdmin: () => Promise<void>;
+  signInUser: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
-const AuthCtx = createContext<Ctx>(null as any);
+const AuthCtx = createContext<AuthState>({
+  token: null,
+  role: null,
+  email: null,
+  loading: true,
+  signInAdmin: async () => {},
+  signInUser: async () => {},
+  signOut: async () => {},
+});
 
+export const useAuth = () => useContext(AuthCtx);
+
+// ── Your existing Clerk OIDC values (unchanged)
 const ISSUER = 'https://moving-ferret-78.clerk.accounts.dev';
 const REDIRECT_URL = 'com.doorlockapp://callback';
+const ADMIN_CLIENT_ID = '5si8xSwPl6n2oQLY';
+const USER_CLIENT_ID  = '2JbPx2I2fknWbmf8';
 
-const OAUTH_ADMIN = {
-  clientId: '5si8xSwPl6n2oQLY',
+const cfg = (clientId: string) => ({
+  clientId,
   redirectUrl: REDIRECT_URL,
-  scopes: ['openid','email','profile'],
+  scopes: ['openid', 'email', 'profile'],
   serviceConfiguration: {
     authorizationEndpoint: `${ISSUER}/oauth/authorize`,
-    tokenEndpoint:        `${ISSUER}/oauth/token`,
+    tokenEndpoint: `${ISSUER}/oauth/token`,
   },
-};
+});
 
-const OAUTH_USER = {
-  clientId: '2JbPx2I2fknWbmf8',
-  redirectUrl: REDIRECT_URL,
-  scopes: ['openid','email','profile'],
-  serviceConfiguration: {
-    authorizationEndpoint: `${ISSUER}/oauth/authorize`,
-    tokenEndpoint:        `${ISSUER}/oauth/token`,
-  },
-};
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AuthState>({ token: null, role: null, email: null, loading: false });
-
-  const signIn = async (role: 'admin' | 'user') => {
-    setState(s => ({ ...s, loading: true }));
-    try {
-      const cfg = role === 'admin' ? OAUTH_ADMIN : OAUTH_USER;
-      const auth: AuthorizeResult = await authorize(cfg);
-      const raw = auth.idToken || auth.accessToken || auth.id_token || auth.access_token;
-      if (!raw) throw new Error('No token from IdP');
-
-      // store
-      await Keychain.setGenericPassword('clerk', JSON.stringify({ raw, role }));
-      // verify with backend, also upsert user and confirm role
-      const me = await getMe(raw);
-      setState({ token: raw, role: me.user.role as Role, email: me.user.email, loading: false });
-    } catch (e:any) {
-      setState(s => ({ ...s, loading: false }));
-      throw e;
-    }
-  };
-
-  const signOut = async () => {
-    await Keychain.resetGenericPassword();
-    setState({ token: null, role: null, email: null, loading: false });
-  };
-
-  const value = useMemo(() => ({ ...state, signIn, signOut }), [state]);
-  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
+// ── Minimal email decode helper (unchanged)
+function decodeEmail(idToken?: string | null) {
+  try { return idToken ? (jwtDecode as any)(idToken)?.email ?? null : null; }
+  catch { return null; }
 }
 
-export function useAuth() { return useContext(AuthCtx); }
+// ── Keychain helpers (NEW)
+const KC_SERVICE = 'doorlock-auth-v1'; // change if you need to reset all devices
+
+type SavedSession = { token: string; role: Role; email: string | null };
+
+async function saveSession(s: SavedSession) {
+  await Keychain.setGenericPassword('session', JSON.stringify(s), {
+    service: KC_SERVICE,
+    accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+  });
+}
+
+async function loadSession(): Promise<SavedSession | null> {
+  const c = await Keychain.getGenericPassword({ service: KC_SERVICE });
+  if (!c) return null;
+  try { return JSON.parse(c.password) as SavedSession; }
+  catch { return null; }
+}
+
+async function clearSession() {
+  try { await Keychain.resetGenericPassword({ service: KC_SERVICE }); } catch {}
+}
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [token, setToken]     = useState<string | null>(null);
+  const [role, setRole]       = useState<Role>(null);
+  const [email, setEmail]     = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Silent restore on mount (NEW)
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const sess = await loadSession();
+        if (sess?.token) {
+          setToken(sess.token);
+          setEmail(sess.email ?? decodeEmail(sess.token));
+          // Confirm role with backend; fall back to stored role if 401/offline
+          const me = await getMe(sess.token).catch(() => null);
+          setRole(me?.user?.role ?? sess.role ?? null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function doSignIn(clientId: string) {
+    setLoading(true);
+    try {
+      const auth = await authorize(cfg(clientId));
+      const raw =
+        auth.idToken ||
+        auth.accessToken ||
+        (auth as any).id_token ||
+        (auth as any).access_token;
+      if (!raw) throw new Error('No token from IdP');
+
+      const emailFromToken = decodeEmail(raw);
+      setToken(raw);
+      setEmail(emailFromToken);
+
+      // Ask backend who we are (and ensure user row exists)
+      const me = await getMe(raw);
+      const resolvedRole: Role = me?.user?.role ?? null;
+      setRole(resolvedRole);
+
+      // Persist (NEW)
+      await saveSession({ token: raw, role: resolvedRole, email: emailFromToken ?? null });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const signInAdmin = () => doSignIn(ADMIN_CLIENT_ID);
+  const signInUser  = () => doSignIn(USER_CLIENT_ID);
+
+  const signOut = async () => {
+    setToken(null);
+    setRole(null);
+    setEmail(null);
+    await clearSession();
+  };
+
+  const value = useMemo(
+    () => ({ token, role, email, loading, signInAdmin, signInUser, signOut }),
+    [token, role, email, loading]
+  );
+
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
+};

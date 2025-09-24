@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Buffer } from 'buffer';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import { scanAndConnectForLockId, sendAcl } from '../ble/bleManager';
 import { fetchLatestAcl } from '../services/apiService';
 
@@ -27,26 +27,43 @@ export default function PushAclScreen() {
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
     ];
-    if (Platform.Version < 31)
+    if (Platform.Version < 31) {
       perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+    }
     for (const p of perms) {
       const g = await PermissionsAndroid.request(p);
-      if (g !== PermissionsAndroid.RESULTS.GRANTED)
+      if (g !== PermissionsAndroid.RESULTS.GRANTED) {
         throw new Error(`Missing permission: ${p}`);
+      }
     }
   }
 
   const getFromServer = async () => {
     try {
+      if (!token) {
+        Alert.alert('Sign in again', 'Your session is missing/expired.');
+        return;
+      }
       setStatus('Downloading ACL…');
-      const data = await fetchLatestAcl(Number(lockId));
+      const data = await fetchLatestAcl(token, Number(lockId));
       if (!data?.ok || !data?.envelope) throw new Error('no-acl');
+
       setText(JSON.stringify(data.envelope, null, 2));
       setStatus('Downloaded');
       Alert.alert('OK', 'Latest ACL downloaded from server.');
     } catch (e) {
+      const err =
+        e?.response?.data?.err || e?.response?.data?.error || e?.message;
       setStatus('Download failed');
-      Alert.alert('Error', String(e?.message || e));
+      if (err === 'forbidden') {
+        Alert.alert('Not allowed', 'Admin access is required for ACL.');
+      } else if (err === 'Unauthorized' || err === 'No token') {
+        Alert.alert('Sign in again', 'Your session expired.');
+      } else if (err === 'no-acl') {
+        Alert.alert('No ACL', 'No ACL has been uploaded for this lock yet.');
+      } else {
+        Alert.alert('Error', String(err));
+      }
     }
   };
 
@@ -73,7 +90,7 @@ export default function PushAclScreen() {
         return;
       }
 
-      // quick checks
+      // quick checks (helps catch bad base64 before it hits the ESP32)
       console.log(
         'sig bytes:',
         Buffer.from(String(envelope?.sig || ''), 'base64').length,
@@ -99,6 +116,7 @@ export default function PushAclScreen() {
   return (
     <View style={s.c}>
       <Text style={s.t}>Push ACL</Text>
+
       <TextInput
         style={s.in}
         value={lockId}
