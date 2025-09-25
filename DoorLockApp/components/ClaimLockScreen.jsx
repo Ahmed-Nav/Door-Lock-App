@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
-import { claimLockOnServer } from '../services/apiService';
+import { claimLockOnServer /* , getAdminPub */ } from '../services/apiService';
 
 export default function ClaimLockScreen() {
   const { token, role, email } = useAuth();
@@ -23,21 +23,52 @@ export default function ClaimLockScreen() {
         Alert.alert('Forbidden', 'Only Admins can claim locks.');
         return;
       }
+      if (!token) {
+        Alert.alert('Please sign in again');
+        return;
+      }
+      if (!lockId.trim() || !claimCode.trim()) {
+        Alert.alert('Missing data', 'Enter Lock ID and Claim Code.');
+        return;
+      }
+
       setStatus('Claiming on server…');
+
+      // --- If your firmware needs adminPub at claim time (optional) ---
+      // const pubRes = await getAdminPub(token);
+      // if (!pubRes?.ok || !pubRes?.pub) throw new Error('no-admin-pub');
+      // const adminPubB64 = pubRes.pub;
+      // (send adminPubB64 via BLE owner-write if your on-device claim requires it)
+
       const res = await claimLockOnServer(token, {
         lockId: Number(lockId),
         claimCode,
       });
-      if (!res?.ok) throw new Error(res?.err || 'claim-failed');
+
+      if (!res?.ok) {
+        const err = res?.err || 'claim-failed';
+        throw new Error(err);
+      }
+
       setStatus('Claimed');
       Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
     } catch (e) {
       setStatus('Claim Failed');
       const err = e?.response?.data?.err || e?.message;
+
+      // Friendly messages for common cases
       if (err === 'already-claimed') {
         Alert.alert('Already claimed', 'This lock has already been claimed.');
       } else if (err === 'bad-claim') {
         Alert.alert('Invalid code', 'The claim code is incorrect.');
+      } else if (err === 'lock-not-found') {
+        Alert.alert('Not found', 'This lock is not registered on server.');
+      } else if (err === 'missing-fields' || err === 'bad-lockId') {
+        Alert.alert('Invalid input', 'Check Lock ID and claim code.');
+      } else if (err === 'Unauthorized' || err === 'No token') {
+        Alert.alert('Sign in again', 'Your session expired.');
+      } else if (err === 'forbidden') {
+        Alert.alert('Forbidden', 'Admin access required.');
       } else {
         Alert.alert('Claim failed', String(err));
       }
@@ -58,6 +89,7 @@ export default function ClaimLockScreen() {
         value={lockId}
         onChangeText={setLockId}
       />
+
       <TextInput
         style={s.in}
         placeholder="Claim Code"

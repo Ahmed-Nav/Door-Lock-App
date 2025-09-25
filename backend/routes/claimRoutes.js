@@ -1,9 +1,11 @@
+// backend/routes/claimRoutes.js
 const express = require("express");
 const crypto = require("crypto");
 const { connectDB } = require("../services/db");
 const Lock = require("../models/Lock");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
+const { getOrCreateLockKey } = require("../services/keyService");
 
 const router = express.Router();
 
@@ -22,9 +24,8 @@ router.post(
       const lockId = Number(req.params.lockId);
       const claimCode = String(req.body?.claimCode || "");
 
-      if (!lockId || !claimCode) {
+      if (!lockId || !claimCode)
         return res.status(400).json({ ok: false, err: "missing-fields" });
-      }
 
       const lock = await Lock.findOne({ lockId }).lean();
       if (!lock)
@@ -35,14 +36,21 @@ router.post(
       const want = (lock.claimCodeHash || "").trim();
       const gotHex = sha256Hex(claimCode);
       const gotB64 = sha256B64(claimCode);
-
       const match =
         want.toLowerCase() === gotHex.toLowerCase() ||
         want.replace(/=+$/, "") === gotB64.replace(/=+$/, "");
       if (!match) return res.status(403).json({ ok: false, err: "bad-claim" });
 
+      // Ensure a server-side keypair exists for this lock:
+      const k = await getOrCreateLockKey(lockId);
+
+      // Do NOT mark claimed here; mark claimed after BLE Owner write succeeds,
+      // or keep as-is if your app marks claimed after the BLE success roundtrip.
+      // Keeping your previous logic:
       await Lock.updateOne({ lockId }, { $set: { claimed: true } });
-      return res.json({ ok: true });
+
+      // Return the adminPub the phone must write into the lock
+      return res.json({ ok: true, adminPub: k.adminPubB64 });
     } catch (e) {
       return res.status(500).json({ ok: false, err: e.message });
     }
