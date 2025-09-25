@@ -1,5 +1,5 @@
 // DoorLockApp/components/ClaimLockScreen.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,68 +9,86 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
-import { claimLockOnServer /* , getAdminPub */ } from '../services/apiService';
+import { claimLockOnServer } from '../services/apiService';
 
-export default function ClaimLockScreen() {
+export default function ClaimLockScreen({ navigation, route }) {
   const { token, role, email } = useAuth();
-  const [lockId, setLockId] = useState('101');
-  const [claimCode, setClaimCode] = useState('ABC-123-XYZ');
+
+  // Pre-fill from QR (or defaults)
+  const [lockId, setLockId] = useState(String(route?.params?.lockId ?? '101'));
+  const [claimCode, setClaimCode] = useState(
+    String(route?.params?.claimCode ?? 'ABC-123-XYZ'),
+  );
   const [status, setStatus] = useState('Idle');
+
+  // Update fields if new params arrive (e.g., after scanning another QR)
+  useEffect(() => {
+    if (route?.params?.lockId != null) {
+      setLockId(String(route.params.lockId));
+    }
+    if (route?.params?.claimCode != null) {
+      setClaimCode(String(route.params.claimCode));
+    }
+  }, [route?.params?.lockId, route?.params?.claimCode]);
+
+  const scanQr = () => {
+    navigation.navigate('ClaimQr');
+  };
 
   const doClaim = async () => {
     try {
       if (role !== 'admin') {
-        Alert.alert('Forbidden', 'Only Admins can claim locks.');
+        Alert.alert('Forbidden', 'Only admins can claim locks.');
         return;
       }
       if (!token) {
-        Alert.alert('Please sign in again');
+        Alert.alert('Not signed in', 'Please sign in again.');
         return;
       }
-      if (!lockId.trim() || !claimCode.trim()) {
-        Alert.alert('Missing data', 'Enter Lock ID and Claim Code.');
+      const lid = Number(lockId);
+      if (!lid || Number.isNaN(lid)) {
+        Alert.alert('Invalid Lock ID', 'Please enter a valid number.');
+        return;
+      }
+      if (!claimCode.trim()) {
+        Alert.alert('Missing Claim Code', 'Please enter the claim code.');
         return;
       }
 
-      setStatus('Claiming on server…');
+      setStatus('Claiming…');
+      const res = await claimLockOnServer(
+        { lockId: lid, claimCode: claimCode.trim() },
+        token,
+      );
 
-      // --- If your firmware needs adminPub at claim time (optional) ---
-      // const pubRes = await getAdminPub(token);
-      // if (!pubRes?.ok || !pubRes?.pub) throw new Error('no-admin-pub');
-      // const adminPubB64 = pubRes.pub;
-      // (send adminPubB64 via BLE owner-write if your on-device claim requires it)
-
-      const res = await claimLockOnServer(token, {
-        lockId: Number(lockId),
-        claimCode,
-      });
-
-      if (!res?.ok) {
-        const err = res?.err || 'claim-failed';
-        throw new Error(err);
+      if (res?.ok) {
+        setStatus('Claimed');
+        Alert.alert('Success', `Lock ${lid} claimed on server.`);
+        return;
       }
 
-      setStatus('Claimed');
-      Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
+      // If backend returned ok:false but 200 (unlikely), handle here:
+      throw new Error(res?.err || 'claim-failed');
     } catch (e) {
       setStatus('Claim Failed');
-      const err = e?.response?.data?.err || e?.message;
-
-      // Friendly messages for common cases
-      if (err === 'already-claimed') {
-        Alert.alert('Already claimed', 'This lock has already been claimed.');
-      } else if (err === 'bad-claim') {
-        Alert.alert('Invalid code', 'The claim code is incorrect.');
-      } else if (err === 'lock-not-found') {
-        Alert.alert('Not found', 'This lock is not registered on server.');
-      } else if (err === 'missing-fields' || err === 'bad-lockId') {
-        Alert.alert('Invalid input', 'Check Lock ID and claim code.');
-      } else if (err === 'Unauthorized' || err === 'No token') {
-        Alert.alert('Sign in again', 'Your session expired.');
+      // Friendly error mapping
+      const err = e?.response?.data?.err || e?.message || e;
+      if (err === 'already-claimed' || e?.response?.status === 409) {
+        Alert.alert('Already Claimed', 'This lock is already claimed.');
+      } else if (err === 'bad-claim' || e?.response?.status === 403) {
+        Alert.alert('Invalid Code', 'The claim code is incorrect.');
+      } else if (err === 'lock-not-found' || e?.response?.status === 404) {
+        Alert.alert('Not Found', 'No lock with that ID exists.');
       } else if (err === 'forbidden') {
-        Alert.alert('Forbidden', 'Admin access required.');
+        Alert.alert('Forbidden', 'Admin access is required.');
+      } else if (
+        err === 'Unauthorized' ||
+        err === 'No token' ||
+        e?.response?.status === 401
+      ) {
+        Alert.alert('Sign in again', 'Your session expired.');
       } else {
-        Alert.alert('Claim failed', String(err));
+        Alert.alert('Claim Error', String(err));
       }
     }
   };
@@ -79,8 +97,20 @@ export default function ClaimLockScreen() {
     <View style={s.c}>
       <Text style={s.t}>Claim a Lock</Text>
       <Text style={s.label}>
-        {email ? `Signed in as ${email} (${role})` : 'Not signed in'}
+        {email ? `Signed in as ${email}` : 'Signed in'}
       </Text>
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={scanQr}>
+          <Text style={s.bt}>Scan QR</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.btn, { backgroundColor: '#7B1FA2', flex: 1 }]}
+          onPress={doClaim}
+        >
+          <Text style={s.bt}>Claim</Text>
+        </TouchableOpacity>
+      </View>
 
       <TextInput
         style={s.in}
@@ -89,20 +119,13 @@ export default function ClaimLockScreen() {
         value={lockId}
         onChangeText={setLockId}
       />
-
       <TextInput
         style={s.in}
         placeholder="Claim Code"
         value={claimCode}
         onChangeText={setClaimCode}
+        autoCapitalize="characters"
       />
-
-      <TouchableOpacity
-        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
-        onPress={doClaim}
-      >
-        <Text style={s.bt}>Claim</Text>
-      </TouchableOpacity>
 
       <Text style={s.status}>Status: {status}</Text>
     </View>

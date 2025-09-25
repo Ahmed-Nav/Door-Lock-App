@@ -1,33 +1,25 @@
-// DoorLockApp/App.tsx
+// App.tsx
 import React from 'react';
+import 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import AdminHome from './components/AdminHome';
-import GroupsList from './components/GroupsList';
-import GroupDetail from './components/GroupDetail';
 import RoleSelectScreen from './components/RoleSelectScreen';
+import AdminHomeScreen from './components/AdminHomeScreen';
 import ClaimLockScreen from './components/ClaimLockScreen';
 import PushAclScreen from './components/PushAclScreen';
 import UnlockScreen from './components/UnlockScreen';
-import { View, Text } from 'react-native';
+import RebuildAclScreen from './components/RebuildAclScreen';  // NEW
+import GroupsScreen from './components/GroupsScreen';          // NEW
+import ClaimQrScreen from './components/ClaimQrScreen';        // NEW (used from Claim)
 
 const Stack = createNativeStackNavigator();
 
+function Router() {
+  const { role, loading } = useAuth();
+  if (loading) return null;
 
-function Shell() {
-  const { token, role, loading } = useAuth();
-  console.log('SHELL state:', { token: !!token, role, loading });
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0b0b0f', alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: 'white' }}>Loading…</Text>
-      </View>
-    );
-  }
-
-  if (!token || !role) {
+  if (!role) {
     return (
       <Stack.Navigator>
         <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
@@ -36,20 +28,21 @@ function Shell() {
   }
 
   if (role === 'admin') {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen name="AdminHome" component={AdminHome} options={{ headerShown: false }} />
-      <Stack.Screen name="Claim" component={ClaimLockScreen} options={{ title: 'Claim a Lock' }} />
-      <Stack.Screen name="Groups" component={GroupsList} options={{ title: 'Groups' }} />
-      <Stack.Screen name="GroupDetail" component={GroupDetail} options={{ title: 'Group' }} />
-      <Stack.Screen name="PushACL" component={PushAclScreen} options={{ title: 'Push ACL' }} />
-    </Stack.Navigator>
-  );
-}
+    return (
+      <Stack.Navigator>
+        <Stack.Screen name="AdminHome" component={AdminHomeScreen} options={{ title: 'Admin' }} />
+        <Stack.Screen name="ClaimLock" component={ClaimLockScreen} options={{ title: 'Claim Lock' }} />
+        <Stack.Screen name="ClaimQr" component={ClaimQrScreen} options={{ title: 'Scan Claim QR' }} />
+        <Stack.Screen name="PushAcl" component={PushAclScreen} options={{ title: 'Push ACL' }} />
+        <Stack.Screen name="RebuildAcl" component={RebuildAclScreen} options={{ title: 'Rebuild ACL' }} />
+        <Stack.Screen name="Groups" component={GroupsScreen} options={{ title: 'Groups' }} />
+      </Stack.Navigator>
+    );
+  }
 
   return (
     <Stack.Navigator>
-      <Stack.Screen name="UnlockScreen" component={UnlockScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Unlock" component={UnlockScreen} options={{ title: 'Unlock' }} />
     </Stack.Navigator>
   );
 }
@@ -58,7 +51,7 @@ export default function App() {
   return (
     <AuthProvider>
       <NavigationContainer>
-        <Shell />
+        <Router />
       </NavigationContainer>
     </AuthProvider>
   );
