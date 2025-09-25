@@ -1,104 +1,142 @@
-// DoorLockApp/components/GroupDetail.tsx
+// components/GroupDetail.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert, StyleSheet } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { addUserToGroup, assignLockToGroup, rebuildAcl, listGroups } from '../services/apiService';
+import {
+  getGroup,
+  removeUserFromGroup,
+  unassignLockFromGroup,
+  deleteGroup,
+} from '../services/apiService';
 
 export default function GroupDetail() {
-  const route = useRoute<any>();
-  const nav = useNavigation<any>();
   const { token } = useAuth();
-  const { id, name } = route.params;
-
-  // For simplicity we reload the list and pick the current group to show members/locks
-  const [group, setGroup] = useState<any>(null);
-  const [userEmail, setUserEmail] = useState('');
-  const [lockId, setLockId] = useState('');
+  const route = useRoute<any>();
+  const nav = useNavigation();
+  const groupId = route.params?.groupId;
+  const [g, setG] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
+    setLoading(true);
     try {
-      const r = await listGroups(token!);
-      const g = (r.groups || []).find((x: any) => x._id === id);
-      setGroup(g || null);
-    } catch {
-      Alert.alert('Error', 'Failed to load group');
+      const d = await getGroup(token, groupId);
+      setG(d.group);
+    } finally {
+      setLoading(false);
     }
   }
-  useEffect(() => { load(); }, []);
 
-  async function onAddUser() {
+  useEffect(() => {
+    load();
+  }, [groupId]);
+
+  const doRemoveUser = async (email: string) => {
     try {
-      if (!userEmail.trim()) return;
-      await addUserToGroup(token!, id, userEmail.trim());
-      setUserEmail('');
+      await removeUserFromGroup(token, groupId, email);
       await load();
-    } catch { Alert.alert('Error', 'Add user failed'); }
-  }
+    } catch (e) {
+      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+    }
+  };
 
-  async function onAddLock() {
+  const doUnassignLock = async (lockId: number) => {
     try {
-      const n = Number(lockId);
-      if (!n) return;
-      await assignLockToGroup(token!, id, n);
-      setLockId('');
+      await unassignLockFromGroup(token, groupId, lockId);
       await load();
-    } catch { Alert.alert('Error', 'Add lock failed'); }
-  }
+    } catch (e) {
+      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+    }
+  };
 
-  async function onRebuild(lockIdNum: number) {
-    try {
-      const r = await rebuildAcl(token!, lockIdNum);
-      Alert.alert('ACL', `Built v${r.version || '?'} for lock ${lockIdNum}`, [
-        { text: 'Push now', onPress: () => nav.navigate('PushACL', { lockId: String(lockIdNum) }) },
-        { text: 'OK' }
-      ]);
-    } catch { Alert.alert('Error', 'Rebuild failed'); }
+  const doDeleteGroup = async () => {
+    Alert.alert('Delete group?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteGroup(token, groupId);
+            nav.goBack();
+          } catch (e) {
+            Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+          }
+        },
+      },
+    ]);
+  };
+
+  if (loading || !g) {
+    return (
+      <View style={s.c}>
+        <Text style={s.t}>Loading…</Text>
+      </View>
+    );
   }
 
   return (
     <View style={s.c}>
-      <Text style={s.t}>Group: {name}</Text>
+      <Text style={s.h}>Group: {g.name}</Text>
 
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-        <TextInput style={[s.in, { flex: 1 }]} value={userEmail} onChangeText={setUserEmail} placeholder="user@domain.com" />
-        <TouchableOpacity style={s.btn} onPress={onAddUser}><Text style={s.bt}>Add user</Text></TouchableOpacity>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-        <TextInput style={[s.in, { flex: 1 }]} value={lockId} onChangeText={setLockId} placeholder="Lock ID" keyboardType="numeric" />
-        <TouchableOpacity style={s.btn} onPress={onAddLock}><Text style={s.bt}>Add lock</Text></TouchableOpacity>
-      </View>
-
-      <ScrollView style={{ marginTop: 16 }}>
-        <Text style={s.h}>Users</Text>
-        {(group?.userIds || []).map((u: any) => (
-          <View key={u} style={s.pill}><Text style={s.pillt}>{u}</Text></View>
-        ))}
-
-        <Text style={[s.h, { marginTop: 12 }]}>Locks</Text>
-        {(group?.lockIds || []).map((lid: number) => (
-          <View key={lid} style={s.lockRow}>
-            <Text style={s.lockTxt}>Lock {lid}</Text>
-            <TouchableOpacity style={[s.btn, { paddingVertical: 8 }]} onPress={() => onRebuild(lid)}>
-              <Text style={s.bt}>Rebuild ACL</Text>
+      <Text style={s.t2}>Users</Text>
+      <FlatList
+        data={g.users}
+        keyExtractor={(u) => u.id}
+        renderItem={({ item }) => (
+          <View style={s.row}>
+            <Text style={s.rowText}>{item.email}</Text>
+            <TouchableOpacity style={[s.btn, { backgroundColor: '#9b1c1c' }]} onPress={() => doRemoveUser(item.email)}>
+              <Text style={s.btnText}>Remove</Text>
             </TouchableOpacity>
           </View>
-        ))}
-      </ScrollView>
+        )}
+        ListEmptyComponent={<Text style={s.empty}>No users</Text>}
+      />
+
+      <Text style={[s.t2, { marginTop: 12 }]}>Locks</Text>
+      <FlatList
+        data={g.lockIds}
+        keyExtractor={(id) => String(id)}
+        renderItem={({ item }) => (
+          <View style={s.row}>
+            <Text style={s.rowText}>Lock #{item}</Text>
+            <TouchableOpacity style={[s.btn, { backgroundColor: '#9b1c1c' }]} onPress={() => doUnassignLock(item)}>
+              <Text style={s.btnText}>Unassign</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        ListEmptyComponent={<Text style={s.empty}>No locks</Text>}
+      />
+
+      <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2', marginTop: 16 }]} onPress={load}>
+        <Text style={s.btnText}>Refresh</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[s.btn, { backgroundColor: '#6b21a8', marginTop: 8 }]} onPress={doDeleteGroup}>
+        <Text style={s.btnText}>Delete Group</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  c: { flex: 1, padding: 16, backgroundColor: '#0b0b0f' },
-  t: { color: 'white', fontSize: 20, fontWeight: '700' },
-  h: { color: '#bbb', marginTop: 4, marginBottom: 6 },
-  in: { backgroundColor: '#1d1d25', color: 'white', borderRadius: 8, padding: 12 },
-  btn: { backgroundColor: '#444', padding: 14, borderRadius: 10, alignItems: 'center' },
-  bt: { color: 'white', fontWeight: '600' },
-  pill: { backgroundColor: '#15151d', padding: 8, borderRadius: 8, marginBottom: 6 },
-  pillt: { color: '#ddd' },
-  lockRow: { backgroundColor: '#15151d', padding: 12, borderRadius: 8, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lockTxt: { color: '#fff' },
+  c: { flex: 1, backgroundColor: '#0b0b0f', padding: 16 },
+  h: { color: 'white', fontSize: 20, fontWeight: '700', marginBottom: 8 },
+  t: { color: 'white' },
+  t2: { color: '#ddd', fontWeight: '700', marginTop: 6, marginBottom: 6 },
+  row: {
+    backgroundColor: '#1d1d25',
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rowText: { color: 'white' },
+  btn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+  btnText: { color: 'white', fontWeight: '600' },
+  empty: { color: '#888', marginBottom: 8 },
 });

@@ -21,8 +21,10 @@ export const syncUserToBackend = async token => {
 };
 
 // --- Groups (admin-only) ---
-export const listGroups = async token => {
-  const r = await axios.get(`${API_URL}/groups`, auth(token));
+export const getGroup = async (token, groupId) => {
+  const r = await axios.get(`${API_URL}/groups/${groupId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return r.data;
 };
 
@@ -56,6 +58,31 @@ export const assignLockToGroup = async (
     { lockId, remove },
     auth(token),
   );
+  return r.data;
+};
+
+export const removeUserFromGroup = async (token, groupId, userEmail) => {
+  const r = await axios.post(
+    `${API_URL}/groups/${groupId}/users`,
+    { userEmail, remove: true },
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return r.data;
+};
+
+export const unassignLockFromGroup = async (token, groupId, lockId) => {
+  const r = await axios.post(
+    `${API_URL}/groups/${groupId}/locks`,
+    { lockId, remove: true },
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return r.data;
+};
+
+export const deleteGroup = async (token, groupId) => {
+  const r = await axios.delete(`${API_URL}/groups/${groupId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return r.data;
 };
 

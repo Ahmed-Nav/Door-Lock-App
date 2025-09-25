@@ -1,70 +1,69 @@
-import React, { useCallback, useState } from 'react';
+// DoorLockApp/components/ClaimQrScreen.jsx
+import React, { useCallback } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   Alert,
+  StyleSheet,
   PermissionsAndroid,
   Platform,
 } from 'react-native';
-import { CameraKitCameraScreen } from 'react-native-camera-kit';
+import { CameraScreen } from 'react-native-camera-kit';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-export default function ClaimQrScreen({ navigation }) {
-  const [granted, setGranted] = useState(Platform.OS !== 'android');
+function parseClaim(text = '') {
+  const s = String(text).trim();
+  const kv = /lock\s*:\s*(\d+)\s*;\s*code\s*:\s*([A-Za-z0-9\-_=+/]+)/i.exec(s);
+  if (kv) return { lockId: kv[1], claimCode: kv[2] };
+  const bar = /^LOCK-(\d+)\|(.+)$/.exec(s);
+  if (bar) return { lockId: bar[1], claimCode: bar[2].trim() };
+  try {
+    const j = JSON.parse(s);
+    if (j?.lockId && j?.claimCode)
+      return { lockId: j.lockId, claimCode: j.claimCode };
+  } catch {}
+  return null;
+}
 
-  const ask = useCallback(async () => {
-    if (Platform.OS !== 'android') return;
-    const r = await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.CAMERA,
-    );
-    setGranted(r === PermissionsAndroid.RESULTS.GRANTED);
-  }, []);
+export default function ClaimQrScreen() {
+  const nav = useNavigation();
 
-  React.useEffect(() => {
-    ask();
-  }, [ask]);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        if (Platform.OS === 'android') {
+          const g = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.CAMERA,
+          );
+          if (g !== PermissionsAndroid.RESULTS.GRANTED) {
+            Alert.alert('Camera permission required');
+            nav.goBack();
+          }
+        }
+      })();
+    }, [nav]),
+  );
 
-  const onRead = evt => {
-    try {
-      const text = evt?.nativeEvent?.codeStringValue || '';
-      // expected: lock:<LOCK_ID>;code:<CLAIM_CODE>
-      const m = text.match(/lock:(\d+);code:([A-Za-z0-9\-]+)/i);
-      if (!m) throw new Error('Unrecognized QR');
-      const lockId = m[1];
-      const claimCode = m[2];
-      navigation.replace('ClaimLock', { lockId, claimCode }); // prefill and submit there if you want
-    } catch (e) {
-      Alert.alert('QR Error', String(e.message || e));
-    }
+  const onReadCode = ({ nativeEvent }) => {
+    const text = nativeEvent?.codeStringValue || '';
+    const parsed = parseClaim(text);
+    if (!parsed)
+      return Alert.alert('Invalid QR', 'Expected "lock:<id>;code:<claim>"');
+    nav.navigate('Claim', {
+      lockId: String(parsed.lockId),
+      claimCode: String(parsed.claimCode),
+    });
   };
 
-  if (!granted) {
-    return (
-      <View style={s.c}>
-        <Text style={s.t}>Camera permission required.</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={{ flex: 1 }}>
-      <CameraKitCameraScreen
+    <View style={s.c}>
+      <CameraScreen
+        style={{ flex: 1 }}
         scanBarcode
-        onReadCode={onRead}
+        onReadCode={onReadCode}
         showFrame
-        offsetForScannerFrame
-        colorForScannerFrame="white"
       />
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  c: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0b0b0f',
-  },
-  t: { color: 'white' },
-});
+const s = StyleSheet.create({ c: { flex: 1, backgroundColor: 'black' } });

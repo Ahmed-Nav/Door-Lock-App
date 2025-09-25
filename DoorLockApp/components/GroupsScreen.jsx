@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import {
-  listGroups,
+  getGroup,
   createGroup,
   addUserToGroup,
   assignLockToGroup,
 } from '../services/apiService';
+import { useRoute,useNavigation } from '@react-navigation/native';
+
 
 export default function GroupsScreen() {
   const { token, role } = useAuth();
@@ -23,11 +25,12 @@ export default function GroupsScreen() {
   const [selected, setSelected] = useState(null);
   const [userEmail, setUserEmail] = useState('');
   const [lockId, setLockId] = useState('');
+  const navigation = useNavigation();
 
   const load = async () => {
     try {
       if (role !== 'admin') return;
-      const res = await listGroups(token);
+      const res = await getGroup(token);
       setGroups(res?.groups || []);
     } catch (e) {
       Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
@@ -105,7 +108,9 @@ export default function GroupsScreen() {
               s.card,
               selected?._id === item._id && { borderColor: '#7B1FA2' },
             ]}
-            onPress={() => setSelected(item)}
+            onPress={() =>
+              navigation.navigate('GroupDetail', { groupId: item._id })
+            }
           >
             <Text style={s.cardTitle}>{item.name}</Text>
             <Text style={s.cardMeta}>

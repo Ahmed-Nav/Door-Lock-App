@@ -10,7 +10,8 @@ import ClaimLockScreen from './components/ClaimLockScreen';
 import PushAclScreen from './components/PushAclScreen';
 import UnlockScreen from './components/UnlockScreen';
 import RebuildAclScreen from './components/RebuildAclScreen';  // NEW
-import GroupsScreen from './components/GroupsScreen';          // NEW
+import GroupsScreen from './components/GroupsScreen';
+import GroupDetail from './components/GroupDetail';          // NEW
 import ClaimQrScreen from './components/ClaimQrScreen';        // NEW (used from Claim)
 
 const Stack = createNativeStackNavigator();
@@ -36,6 +37,7 @@ function Router() {
         <Stack.Screen name="PushAcl" component={PushAclScreen} options={{ title: 'Push ACL' }} />
         <Stack.Screen name="RebuildAcl" component={RebuildAclScreen} options={{ title: 'Rebuild ACL' }} />
         <Stack.Screen name="Groups" component={GroupsScreen} options={{ title: 'Groups' }} />
+        <Stack.Screen name="GroupDetail" component={GroupDetail} options={{ title: 'Group Detail' }} />
       </Stack.Navigator>
     );
   }
