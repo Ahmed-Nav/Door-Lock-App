@@ -1,14 +1,17 @@
-// DoorLockApp/components/ClaimQrScreen.jsx
-import React, { useCallback } from 'react';
-import {
-  View,
-  Alert,
-  StyleSheet,
-  PermissionsAndroid,
-  Platform,
-} from 'react-native';
-import { CameraScreen } from 'react-native-camera-kit';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { View, Alert, StyleSheet, Text } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import {
+  Camera,
+  useCameraDevice,
+  useCodeScanner,
+} from 'react-native-vision-camera';
 
 function parseClaim(text = '') {
   const s = String(text).trim();
@@ -26,44 +29,99 @@ function parseClaim(text = '') {
 
 export default function ClaimQrScreen() {
   const nav = useNavigation();
+  const device = useCameraDevice('back');
+  const [hasPermission, setHasPermission] = useState(false);
+  const [handled, setHandled] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
+      let mounted = true;
+      const isOK = (s) => s === 'authorized' || s === 'granted' || s === 'limited';
       (async () => {
-        if (Platform.OS === 'android') {
-          const g = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.CAMERA,
-          );
-          if (g !== PermissionsAndroid.RESULTS.GRANTED) {
-            Alert.alert('Camera permission required');
-            nav.goBack();
-          }
+        let s = await Camera.getCameraPermissionStatus();
+        if (!isOK(s)) {
+          s = await Camera.requestCameraPermission();
         }
+        if (!mounted) return;
+        if (!isOK(s)) {
+          Alert.alert('Camera permission required');
+          nav.goBack();
+          return;
+        }
+        try { await Camera.getAvailableCameraDevices(); } catch {}
+        if (mounted) setHasPermission(true);
       })();
+      return () => {
+        mounted = false;
+        setHandled(false);
+      };
     }, [nav]),
   );
 
-  const onReadCode = ({ nativeEvent }) => {
-    const text = nativeEvent?.codeStringValue || '';
-    const parsed = parseClaim(text);
-    if (!parsed)
-      return Alert.alert('Invalid QR', 'Expected "lock:<id>;code:<claim>"');
-    nav.navigate('Claim', {
-      lockId: String(parsed.lockId),
-      claimCode: String(parsed.claimCode),
-    });
-  };
+  const codeScanner = useCodeScanner({
+    codeTypes: ['qr', 'data-matrix', 'ean-13', 'code-128'], // include what you need
+    onCodeScanned: codes => {
+      if (handled) return;
+      const value = codes?.[0]?.value;
+      if (!value) return;
+      const parsed = parseClaim(value);
+      setHandled(true);
+      if (!parsed) {
+        Alert.alert('Invalid QR', 'Expected "lock:<id>;code:<claim>"');
+        return;
+      }
+      nav.navigate('ClaimLock', {
+        lockId: String(parsed.lockId),
+        claimCode: String(parsed.claimCode),
+      });
+    },
+  });
 
+useEffect(() => {
+  console.log('VC device:', device?.id, device?.position, device?.name);
+}, [device]);
+useEffect(() => {
+  (async () => {
+    const s = await Camera.getCameraPermissionStatus();
+    console.log('VC permission status:', s);
+  })();
+}, []);
+
+if (!hasPermission || !device) {
   return (
-    <View style={s.c}>
-      <CameraScreen
-        style={{ flex: 1 }}
-        scanBarcode
-        onReadCode={onReadCode}
-        showFrame
-      />
+    <View style={[s.c, s.center]}>
+      <Text style={s.msg}>
+        {!hasPermission ? 'Waiting for camera permission…' : 'Opening camera…'}
+      </Text>
     </View>
   );
 }
 
-const s = StyleSheet.create({ c: { flex: 1, backgroundColor: 'black' } });
+  return (
+    <View style={s.c}>
+      <Camera
+        style={StyleSheet.absoluteFill}
+        device={device}
+        isActive={!handled}
+        codeScanner={codeScanner}
+      />
+      <View style={s.frame} />
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  c: { flex: 1, backgroundColor: 'black' },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  msg: { color: 'white', fontSize: 16 },
+  frame: {
+    position: 'absolute',
+    top: '25%',
+    left: '10%',
+    right: '10%',
+    bottom: '25%',
+    borderWidth: 2,
+    borderColor: 'white',
+    borderRadius: 8,
+  },
+});

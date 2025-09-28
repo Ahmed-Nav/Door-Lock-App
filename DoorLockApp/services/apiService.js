@@ -28,6 +28,11 @@ export const getGroup = async (token, groupId) => {
   return r.data;
 };
 
+export const listGroups = async (token) => {
+  const r = await axios.get(`${API_URL}/groups`, { headers: { Authorization: `Bearer ${token}` } });
+  return r.data;
+}
+
 export const createGroup = async (token, name) => {
   const r = await axios.post(`${API_URL}/groups`, { name }, auth(token));
   return r.data;

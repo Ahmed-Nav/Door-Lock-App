@@ -63,7 +63,7 @@ export default function ClaimLockScreen() {
       {/* NEW: Scan button */}
       <TouchableOpacity
         style={[s.btn, { backgroundColor: '#7B1FA2' }]}
-        onPress={() => navigation.navigate('ClaimQR')}
+        onPress={() => navigation.navigate('ClaimQr')}
       >
         <Text style={s.bt}>Scan QR</Text>
       </TouchableOpacity>
