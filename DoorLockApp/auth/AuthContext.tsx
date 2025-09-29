@@ -63,6 +63,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const postLoginHydrate = async (idToken: string) => {
     // 1) Tell backend who we are (upsert & get role)
     const me = await api.get('/auth/me', { headers: { Authorization: `Bearer ${idToken}` } });
+    try {
+  const clerkUserId = (jwtDecode as any)(idToken).sub;
+  const { pubRawB64 } = await ensureKeypair({ clerkUserId, persona: 'user' });
+  await api.put('/users/me/public-keys',
+    { persona: 'user', publicKeyB64: pubRawB64 },
+    { headers: { Authorization: `Bearer ${idToken}` } }
+  );
+} catch (e) {
+  console.error('Upload public key failed:', e);
+  throw e; // keep surfacing so you see 500 instead of silent fail
+}
     const role: Role = me.data.user.role;
     setAccountRole(role);
 

@@ -14,6 +14,7 @@ router.put("/me/public-keys", verifyClerkOidc, async (req, res, next) => {
     });
     res.status(204).send();
   } catch (e) {
+    console.error("public-key upload failed:", e.message);
     next(e);
   }
 });

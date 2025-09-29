@@ -12,11 +12,11 @@ const UserSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Persona public keys (base64 raw, uncompressed P-256 is 65 bytes -> starts with 0x04)
     publicKeys: {
       user: { type: String, default: null },
       admin: { type: String, default: null },
     },
+    default: {},
   },
   { timestamps: true }
 );

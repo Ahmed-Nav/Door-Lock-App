@@ -16,8 +16,7 @@ function matchesConfiguredAdmin({ clerkId, email }) {
   );
 }
 
-// Upsert user every time a valid Clerk token hits the backend.
-// Locks down who can be admin and when.
+
 async function ensureUserFromClerk({ clerkId, email }) {
   if (!clerkId) throw new Error("Missing clerkId");
 
@@ -31,9 +30,9 @@ async function ensureUserFromClerk({ clerkId, email }) {
       clerkId,
       email,
       role: beAdmin ? "admin" : "user",
+      publicKeys: {},
     });
   } else {
-    // Keep email fresh if changed in Clerk
     if (email && email !== user.email) {
       user.email = email;
       await user.save();
@@ -43,17 +42,20 @@ async function ensureUserFromClerk({ clerkId, email }) {
 }
 
 async function setPersonaPublicKey({ clerkId, persona, publicKeyB64 }) {
-  if (!["user", "admin"].includes(persona)) throw new Error("Invalid persona");
-  if (!publicKeyB64 || publicKeyB64.length < 88)
-    throw new Error("Invalid public key"); // quick sanity check
+  if (!clerkId) throw new Error("clerkId_required");
+  if (!["user", "admin"].includes(persona)) throw new Error("invalid_persona");
+  if (typeof publicKeyB64 !== "string" || publicKeyB64.length < 80) {
+    throw new Error("invalid_public_key");
+  }
 
-  const user = await User.findOne({ clerkId });
-  if (!user) throw new Error("User not found");
+  const u = await User.findOneAndUpdate(
+    { clerkId },
+    { $set: { [`publicKeys.${persona}`]: publicKeyB64 } },
+    { new: true, runValidators: true }
+  );
 
-  // Idempotent update
-  user.publicKeys[persona] = publicKeyB64;
-  await user.save();
-  return user;
+  if (!u) throw new Error("user_not_found");
+  return u;
 }
 
 module.exports = {
