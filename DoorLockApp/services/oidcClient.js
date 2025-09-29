@@ -12,22 +12,23 @@ let cachedCfg = null;
 async function getConfig() {
   if (cachedCfg) return cachedCfg;
   const { data } = await api.get('/auth/mobile-oidc-config');
+
+  
+  const apRaw = data.additionalParameters || {};
+  const ap = Object.fromEntries(
+    Object.entries(apRaw).map(([k, v]) => [k, v == null ? '' : String(v)]),
+  );
+
+  ap.prompt = 'login';
+
   const cfg = {
     issuer: data.issuer,
     clientId: data.clientId,
     redirectUrl: data.redirectUrl || 'com.doorlockapp://callback',
     scopes: data.scopes || ['openid', 'email', 'profile'],
-    additionalParameters: { ...(data.additionalParameters || {}) },
+    additionalParameters: ap,
     dangerouslyAllowInsecureHttpRequests: false,
   };
-  if (
-    cfg.additionalParameters?.prompt &&
-    cfg.additionalParameters.prompt !== 'login'
-  ) {
-    cfg.additionalParameters.prompt = 'login';
-  }
-  if (!cfg.additionalParameters)
-    cfg.additionalParameters = { prompt: 'login', max_age: '0' };
   try {
     await prefetchConfiguration({ issuer: cfg.issuer });
   } catch {}
