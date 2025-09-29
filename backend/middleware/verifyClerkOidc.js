@@ -15,6 +15,7 @@ const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`));
 const ADMIN_CLIENT_ID = process.env.CLERK_ADMIN_CLIENT_ID || "";
 const USER_CLIENT_ID = process.env.CLERK_USER_CLIENT_ID || "";
 
+
 module.exports = async function verifyClerkOidc(req, res, next) {
   try {
     const auth = req.headers.authorization || "";
