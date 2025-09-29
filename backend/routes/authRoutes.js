@@ -47,7 +47,7 @@ router.get("/mobile-oidc-config", (_req, res) => {
     clientId: process.env.CLERK_CLIENT_ID_MOBILE,
     redirectUrl: "com.doorlockapp://callback",
     scopes: ["openid", "email", "profile"],
-    additionalParameters: { prompt: "select_account" }, 
+    additionalParameters: { prompt: "login", max_age:0 }, 
   });
 });
 

@@ -20,6 +20,14 @@ async function getConfig() {
     additionalParameters: { ...(data.additionalParameters || {}) },
     dangerouslyAllowInsecureHttpRequests: false,
   };
+  if (
+    cfg.additionalParameters?.prompt &&
+    cfg.additionalParameters.prompt !== 'login'
+  ) {
+    cfg.additionalParameters.prompt = 'login';
+  }
+  if (!cfg.additionalParameters)
+    cfg.additionalParameters = { prompt: 'login', max_age: '0' };
   try {
     await prefetchConfiguration({ issuer: cfg.issuer });
   } catch {}
