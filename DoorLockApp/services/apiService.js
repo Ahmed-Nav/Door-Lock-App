@@ -3,6 +3,11 @@ import axios from 'axios';
 
 const API_URL = 'https://door-lock-app.onrender.com/api';
 
+export const http = axios.create({
+  baseURL: API_URL,
+  timeout: 15000,
+});
+
 // --- helpers ---
 const auth = token => ({
   headers: { Authorization: `Bearer ${token}` },
@@ -15,9 +20,9 @@ export const getMe = async token => {
 };
 
 // (Optional) keep if you still use it somewhere
-export const syncUserToBackend = async token => {
-  const r = await axios.post(`${API_URL}/auth/sync`, {}, auth(token));
-  return r.data;
+export const getMobileOidcConfig = async () => {
+  const r = await http.get('/auth/mobile-oidc-config');
+  return r.data; 
 };
 
 // --- Groups (admin-only) ---
@@ -124,3 +129,5 @@ export const getAdminPub = async token => {
   const r = await axios.get(`${API_URL}/auth/admin/pub`, auth(token));
   return r.data; // { ok:true, pub }
 };
+
+export default http;

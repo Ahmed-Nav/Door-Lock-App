@@ -1,34 +1,54 @@
-// backend/routes/authRoutes.js
-const router = require("express").Router();
+// routes/authRoutes.js
+const express = require("express");
+const router = express.Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { connectDB } = require("../services/db");
-const User = require("../models/User");
+const userService = require("../services/userService");
 
-router.get("/me", verifyClerkOidc, async (req, res) => {
+router.get("/me", verifyClerkOidc, async (req, res, next) => {
   try {
-    await connectDB();
-    const { userId, userEmail, role } = req;
+    const user = await userService.ensureUserFromClerk({
+      clerkId: req.auth.clerkId,
+      email: req.auth.email,
+    });
 
-    const doc = await User.findOneAndUpdate(
-      { clerkId: userId },
-      {
-        $setOnInsert: {
-          clerkId: userId,
-          email: userEmail,
-          role: role || "user",
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
+    req.user = user; // so downstream has it if needed
+    const exists = await userService.adminExists();
     res.json({
-      ok: true,
-      user: { id: doc._id.toString(), email: doc.email, role: doc.role },
+      user: {
+        clerkId: user.clerkId,
+        email: user.email,
+        role: user.role,
+        publicKeys: user.publicKeys,
+      },
+      adminExists: exists,
     });
   } catch (e) {
-    console.error("GET /auth/me failed:", e);
-    res.status(500).json({ ok: false, err: "server-error" });
+    next(e);
   }
+});
+
+router.get("/admin-exists", async (_req, res, next) => {
+  try {
+    const exists = await userService.adminExists();
+    res.json({ exists });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/mobile-oidc-config", (_req, res) => {
+  if (!process.env.ISSUER || !process.env.CLERK_CLIENT_ID_MOBILE) {
+    return res
+      .status(500)
+      .json({ error: "ISSUER or CLERK_CLIENT_ID_MOBILE missing" });
+  }
+  res.json({
+    issuer: process.env.ISSUER,
+    clientId: process.env.CLERK_CLIENT_ID_MOBILE,
+    redirectUrl: "com.doorlockapp://callback",
+    scopes: ["openid", "email", "profile"],
+    additionalParameters: { prompt: "select_account" }, 
+  });
 });
 
 module.exports = router;

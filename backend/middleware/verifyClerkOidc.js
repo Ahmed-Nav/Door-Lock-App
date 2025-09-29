@@ -1,48 +1,56 @@
 // backend/middleware/verifyClerkOidc.js
+
 const { createRemoteJWKSet, jwtVerify } = require("jose");
 
-const ISSUER = process.env.ISSUER;
+const ISSUER = process.env.ISSUER; 
+const CLIENT_ID = process.env.CLERK_CLIENT_ID_MOBILE; 
+
 if (!ISSUER) {
   throw new Error(
-    "ISSUER missing in env (e.g. https://<sub>.clerk.accounts.dev)"
+    "ISSUER missing in env (e.g., https://<sub>.clerk.accounts.dev)"
   );
 }
+if (!CLIENT_ID) {
+  throw new Error("CLERK_CLIENT_ID_MOBILE missing in env");
+}
 
-// JWKS from Clerk
+
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`));
 
-// Map client_id/azp → role
-const ADMIN_CLIENT_ID = process.env.CLERK_ADMIN_CLIENT_ID || "";
-const USER_CLIENT_ID = process.env.CLERK_USER_CLIENT_ID || "";
 
 module.exports = async function verifyClerkOidc(req, res, next) {
   try {
     const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-    if (!token) return res.status(401).json({ error: "No token" });
+    if (!auth.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "missing_bearer" });
+    }
+    const token = auth.slice("Bearer ".length).trim();
+    if (!token) {
+      return res.status(401).json({ error: "empty_token" });
+    }
 
-    const { payload } = await jwtVerify(token, JWKS, { issuer: ISSUER });
+    
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: ISSUER,
+      audience: CLIENT_ID, 
+    });
 
-    // client identifier (Clerk puts it in azp; fallbacks for safety)
-    const clientId =
-      payload.azp ||
-      (Array.isArray(payload.aud) ? payload.aud[0] : payload.aud) ||
-      payload.client_id ||
+    
+    const clerkId = payload.sub; 
+    const email =
+      payload.email ||
+      payload.email_address || 
+      (Array.isArray(payload.emails) ? payload.emails[0] : null) ||
       null;
 
-    let role = null;
-    if (clientId === ADMIN_CLIENT_ID) role = "admin";
-    else if (clientId === USER_CLIENT_ID) role = "user";
-    else return res.status(401).json({ error: "unknown-client" });
+    if (!clerkId) {
+      return res.status(401).json({ error: "missing_sub" });
+    }
 
-    req.userId = payload.sub;
-    req.userEmail = payload.email || payload["email"];
-    req.role = role;
-    req.clientId = clientId;
-
+    req.auth = { clerkId, email, token }; 
     next();
   } catch (e) {
-    console.error("OIDC verify failed:", e.message);
-    res.status(401).json({ error: "Unauthorized" });
+    console.error("OIDC verify failed:", e?.code || e?.name, e?.message);
+    return res.status(401).json({ error: "unauthorized" });
   }
 };
