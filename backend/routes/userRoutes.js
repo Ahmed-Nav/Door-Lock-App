@@ -1,3 +1,4 @@
+// backend/routes/userRoutes.js
 const express = require("express");
 const router = express.Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
@@ -17,11 +18,9 @@ router.put("/me/public-keys", verifyClerkOidc, async (req, res, next) => {
       return res.status(400).json({ ok: false, error: "invalid_persona" });
     }
 
-    // normalize base64 (accept base64url)
-    let b64 = String(publicKeyB64).trim();
-    b64 = b64.replace(/-/g, "+").replace(/_/g, "/");
+    // Accept base64 or base64url
+    let b64 = String(publicKeyB64).trim().replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4 !== 0) b64 += "=";
-
     let bytes;
     try {
       bytes = Buffer.from(b64, "base64");
@@ -34,25 +33,31 @@ router.put("/me/public-keys", verifyClerkOidc, async (req, res, next) => {
         .json({ ok: false, error: "invalid_key_len", len: bytes.length });
     }
 
-    // upsert user to avoid races; set role on first sighting
     const role =
       req.auth.email && req.auth.email.toLowerCase() === ADMIN_EMAIL
         ? "admin"
         : "user";
 
-    await User.findOneAndUpdate(
+    const u = await User.findOneAndUpdate(
       { clerkId: req.auth.clerkId },
       {
         $set: {
           email: req.auth.email ?? null,
-          [`publicKeys.${persona}`]: publicKeyB64, // store exactly what client sends
+          [`publicKeys.${persona}`]: publicKeyB64, // store as provided
         },
         $setOnInsert: { role },
       },
-      { upsert: true }
+      {
+        upsert: true,
+        new: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      }
     );
 
-    return res.status(204).send();
+    return res
+      .status(200)
+      .json({ ok: true, userId: u._id, persona, len: bytes.length });
   } catch (e) {
     next(e);
   }

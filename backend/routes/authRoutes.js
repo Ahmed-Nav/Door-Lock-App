@@ -6,21 +6,26 @@ const userService = require("../services/userService");
 
 router.get("/me", verifyClerkOidc, async (req, res, next) => {
   try {
+    console.log("HIT /auth/me", {
+      sub: req.auth?.clerkId,
+      email: req.auth?.email,
+    });
     const user = await userService.ensureUserFromClerk({
       clerkId: req.auth.clerkId,
       email: req.auth.email,
     });
-
-    req.user = user; // so downstream has it if needed
-    const exists = await userService.adminExists();
+    console.log("UPSERTED user", {
+      id: user?._id?.toString(),
+      role: user?.role,
+    });
     res.json({
+      ok: true,
       user: {
         clerkId: user.clerkId,
         email: user.email,
         role: user.role,
         publicKeys: user.publicKeys,
       },
-      adminExists: exists,
     });
   } catch (e) {
     next(e);

@@ -61,43 +61,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const postLoginHydrate = async (idToken: string) => {
-    // 1) Tell backend who we are (upsert & get role)
-    const me = await api.get('/auth/me', { headers: { Authorization: `Bearer ${idToken}` } });
-    try {
-  const clerkUserId = (jwtDecode as any)(idToken).sub;
-  const { pubRawB64 } = await ensureKeypair({ clerkUserId, persona: 'user' });
-  console.log('PK-UPLOAD', { persona: 'user', len: pubRawB64?.length, first8: pubRawB64?.slice(0,8) });
-  await api.put('/users/me/public-keys',
-    { persona: 'user', publicKeyB64: pubRawB64 },
-    { headers: { Authorization: `Bearer ${idToken}` } }
-  );
-} catch (e) {
-  console.error('Upload public key failed:', e);
-  throw e; // keep surfacing so you see 500 instead of silent fail
-}
-    const role: Role = me.data.user.role;
-    setAccountRole(role);
+  // 1) Upsert & fetch role
+  console.log('CALL /auth/me');
+  const me = await api.get('/auth/me', {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  console.log('OK /auth/me', me?.data);
 
-    // 2) Ensure & upload USER persona public key (idempotent)
+  const role: Role = me.data.user.role;
+  setAccountRole(role);
+
+  // 2) Ensure & upload USER persona public key (idempotent)
+  try {
     const clerkUserId = (jwtDecode as any)(idToken).sub;
     const { pubRawB64 } = await ensureKeypair({ clerkUserId, persona: 'user' });
-    console.log('PK-UPLOAD', { persona: 'user', len: pubRawB64?.length, first8: pubRawB64?.slice(0,8) });
-    await api.put('/users/me/public-keys',
+    console.log('CALL PUT /users/me/public-keys', { len: pubRawB64?.length });
+
+    const r = await api.put(
+      '/users/me/public-keys',
       { persona: 'user', publicKeyB64: pubRawB64 },
       { headers: { Authorization: `Bearer ${idToken}` } }
     );
 
-    // Admin can later toggle persona for BLE signing; server role stays authoritative.
-    if (role !== 'admin') setPersona('user');
-  };
+    console.log('OK PUT /users/me/public-keys', r?.data);
+  } catch (e: any) {
+    const status = e?.response?.status;
+    const data = e?.response?.data;
+    console.error('PUT /users/me/public-keys failed:', status, data || e);
+    throw new Error(
+      `public-key upload failed${status ? ` (HTTP ${status})` : ''}${
+        data?.error ? `: ${data.error}` : ''
+      }`
+    );
+  }
 
-  const signIn = async () => {
-    const t = await oidcSignIn();               // system browser login (prompt=select_account)
-    setTokens(t);
-    setClaims(jwtDecode(t.idToken));
-    await persistTokens(t);
-    await postLoginHydrate(t.idToken);
-  };
+  // Admin can later toggle persona for BLE signing; server role stays authoritative.
+  if (role !== 'admin') setPersona('user');
+};
+
+const signIn = async () => {
+  const t = await oidcSignIn(); // opens browser
+  setTokens(t);
+  setClaims(jwtDecode(t.idToken));
+  await persistTokens(t);
+  await postLoginHydrate(t.idToken);
+};
 
   const switchAccount = async () => {
     try { await signOutRemote(tokens || undefined); } catch {}
