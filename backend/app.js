@@ -44,5 +44,11 @@ app.use("/api/users", userRoutes);
 app.use("/api/acl", verifyClerkOidc, hydrateUser, requireAdmin, aclRoutes);
 app.use("/api/groups", verifyClerkOidc, hydrateUser, requireAdmin, groupRoutes);
 
+app.use((err, _req, res, _next) => {
+  console.error("UNHANDLED:", err?.stack || err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ ok: false, error: err.message || "Server error" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log("backend on :" + PORT));

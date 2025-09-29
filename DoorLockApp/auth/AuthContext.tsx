@@ -66,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
   const clerkUserId = (jwtDecode as any)(idToken).sub;
   const { pubRawB64 } = await ensureKeypair({ clerkUserId, persona: 'user' });
+  console.log('PK-UPLOAD', { persona: 'user', len: pubRawB64?.length, first8: pubRawB64?.slice(0,8) });
   await api.put('/users/me/public-keys',
     { persona: 'user', publicKeyB64: pubRawB64 },
     { headers: { Authorization: `Bearer ${idToken}` } }
@@ -80,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2) Ensure & upload USER persona public key (idempotent)
     const clerkUserId = (jwtDecode as any)(idToken).sub;
     const { pubRawB64 } = await ensureKeypair({ clerkUserId, persona: 'user' });
+    console.log('PK-UPLOAD', { persona: 'user', len: pubRawB64?.length, first8: pubRawB64?.slice(0,8) });
     await api.put('/users/me/public-keys',
       { persona: 'user', publicKeyB64: pubRawB64 },
       { headers: { Authorization: `Bearer ${idToken}` } }
