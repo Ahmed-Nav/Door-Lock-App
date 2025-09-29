@@ -1,133 +1,145 @@
 // DoorLockApp/auth/AuthContext.tsx
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
+import { authorize } from 'react-native-app-auth';
 import jwtDecode from 'jwt-decode';
 import * as Keychain from 'react-native-keychain';
-import api from '../services/apiService';
-import { warmUp, signIn as oidcSignIn, signOutRemote } from '../services/oidcClient';
-import { ensureKeypair, clearAllPersonasForUser } from '../lib/keys';
+import { getMe } from '../services/apiService';
 
-type Role = 'admin' | 'user';
-type Persona = 'admin' | 'user';
-type Tokens = { accessToken: string; idToken: string; refreshToken?: string; tokenExpirationDate?: string };
+type Role = 'admin' | 'user' | null;
 
-type Ctx = {
-  isSignedIn: boolean;
-  idToken: string | null;
-  clerkUserId: string | null;
+type AuthState = {
+  token: string | null;
+  role: Role;
   email: string | null;
-  accountRole: Role | null;
-  persona: Persona;
-  setPersona: (p: Persona) => void;
-  signIn: () => Promise<void>;
-  switchAccount: () => Promise<void>;
-  loadTokensFromStore: () => Promise<void>;
-  clearSession: () => Promise<void>;
+  loading: boolean;
+  signInAdmin: () => Promise<void>;
+  signInUser: () => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
-const AuthContext = createContext<Ctx>(null as any);
+const AuthCtx = createContext<AuthState>({
+  token: null,
+  role: null,
+  email: null,
+  loading: true,
+  signInAdmin: async () => {},
+  signInUser: async () => {},
+  signOut: async () => {},
+});
+
+export const useAuth = () => useContext(AuthCtx);
+
+// ── Your existing Clerk OIDC values (unchanged)
+const ISSUER = 'https://moving-ferret-78.clerk.accounts.dev';
+const REDIRECT_URL = 'com.doorlockapp://callback';
+const ADMIN_CLIENT_ID = '5si8xSwPl6n2oQLY';
+const USER_CLIENT_ID  = '2JbPx2I2fknWbmf8';
+
+const cfg = (clientId: string) => ({
+  clientId,
+  redirectUrl: REDIRECT_URL,
+  scopes: ['openid', 'email', 'profile'],
+  serviceConfiguration: {
+    authorizationEndpoint: `${ISSUER}/oauth/authorize`,
+    tokenEndpoint: `${ISSUER}/oauth/token`,
+  },
+});
+
+// ── Minimal email decode helper (unchanged)
+function decodeEmail(idToken?: string | null) {
+  try { return idToken ? (jwtDecode as any)(idToken)?.email ?? null : null; }
+  catch { return null; }
+}
+
+// ── Keychain helpers (NEW)
+const KC_SERVICE = 'doorlock-auth-v1'; // change if you need to reset all devices
+
+type SavedSession = { token: string; role: Role; email: string | null };
+
+async function saveSession(s: SavedSession) {
+  await Keychain.setGenericPassword('session', JSON.stringify(s), {
+    service: KC_SERVICE,
+    accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+  });
+}
+
+async function loadSession(): Promise<SavedSession | null> {
+  const c = await Keychain.getGenericPassword({ service: KC_SERVICE });
+  if (!c) return null;
+  try { return JSON.parse(c.password) as SavedSession; }
+  catch { return null; }
+}
+
+async function clearSession() {
+  try { await Keychain.resetGenericPassword({ service: KC_SERVICE }); } catch {}
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tokens, setTokens] = useState<Tokens | null>(null);
-  const [accountRole, setAccountRole] = useState<Role | null>(null);
-  const [claims, setClaims] = useState<any>(null);
-  const [persona, setPersona] = useState<Persona>('user');
+  const [token, setToken]     = useState<string | null>(null);
+  const [role, setRole]       = useState<Role>(null);
+  const [email, setEmail]     = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { warmUp(); }, []);
+  // Silent restore on mount (NEW)
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const sess = await loadSession();
+        if (sess?.token) {
+          setToken(sess.token);
+          setEmail(sess.email ?? decodeEmail(sess.token));
+          // Confirm role with backend; fall back to stored role if 401/offline
+          const me = await getMe(sess.token).catch(() => null);
+          setRole(me?.user?.role ?? sess.role ?? null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  const persistTokens = async (t: Tokens | null) => {
-    if (t) {
-      await Keychain.setGenericPassword('oidc', JSON.stringify(t), { service: 'dl:oidc' });
-    } else {
-      await Keychain.resetGenericPassword({ service: 'dl:oidc' }).catch(() => {});
+  async function doSignIn(clientId: string) {
+    setLoading(true);
+    try {
+      const auth = await authorize(cfg(clientId));
+      const raw =
+        auth.idToken ||
+        auth.accessToken ||
+        (auth as any).id_token ||
+        (auth as any).access_token;
+      if (!raw) throw new Error('No token from IdP');
+
+      const emailFromToken = decodeEmail(raw);
+      setToken(raw);
+      setEmail(emailFromToken);
+
+      // Ask backend who we are (and ensure user row exists)
+      const me = await getMe(raw);
+      const resolvedRole: Role = me?.user?.role ?? null;
+      setRole(resolvedRole);
+
+      // Persist (NEW)
+      await saveSession({ token: raw, role: resolvedRole, email: emailFromToken ?? null });
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const loadTokensFromStore = async () => {
-    const s = await Keychain.getGenericPassword({ service: 'dl:oidc' });
-    if (s !== false) {
-      const t = JSON.parse(s.password);
-      setTokens(t);
-      setClaims(jwtDecode(t.idToken));
-      await postLoginHydrate(t.idToken);
-    }
-  };
-
-  const clearSession = async () => {
-    setTokens(null);
-    setClaims(null);
-    setAccountRole(null);
-    setPersona('user');
-    await persistTokens(null);
-  };
-
-  const postLoginHydrate = async (idToken: string) => {
-  // 1) Upsert & fetch role
-  console.log('CALL /auth/me');
-  const me = await api.get('/auth/me', {
-    headers: { Authorization: `Bearer ${idToken}` },
-  });
-  console.log('OK /auth/me', me?.data);
-
-  const role: Role = me.data.user.role;
-  setAccountRole(role);
-
-  // 2) Ensure & upload USER persona public key (idempotent)
-  try {
-    const clerkUserId = (jwtDecode as any)(idToken).sub;
-    const { pubRawB64 } = await ensureKeypair({ clerkUserId, persona: 'user' });
-    console.log('CALL PUT /users/me/public-keys', { len: pubRawB64?.length });
-
-    const r = await api.put(
-      '/users/me/public-keys',
-      { persona: 'user', publicKeyB64: pubRawB64 },
-      { headers: { Authorization: `Bearer ${idToken}` } }
-    );
-
-    console.log('OK PUT /users/me/public-keys', r?.data);
-  } catch (e: any) {
-    const status = e?.response?.status;
-    const data = e?.response?.data;
-    console.error('PUT /users/me/public-keys failed:', status, data || e);
-    throw new Error(
-      `public-key upload failed${status ? ` (HTTP ${status})` : ''}${
-        data?.error ? `: ${data.error}` : ''
-      }`
-    );
   }
 
-  // Admin can later toggle persona for BLE signing; server role stays authoritative.
-  if (role !== 'admin') setPersona('user');
-};
+  const signInAdmin = () => doSignIn(ADMIN_CLIENT_ID);
+  const signInUser  = () => doSignIn(USER_CLIENT_ID);
 
-const signIn = async () => {
-  const t = await oidcSignIn(); // opens browser
-  setTokens(t);
-  setClaims(jwtDecode(t.idToken));
-  await persistTokens(t);
-  await postLoginHydrate(t.idToken);
-};
-
-  const switchAccount = async () => {
-    try { await signOutRemote(tokens || undefined); } catch {}
-    if (claims?.sub) await clearAllPersonasForUser(claims.sub);
+  const signOut = async () => {
+    setToken(null);
+    setRole(null);
+    setEmail(null);
     await clearSession();
-    // Next call to signIn() will show Picker due to prompt=select_account
   };
 
-  const value = useMemo<Ctx>(() => ({
-    isSignedIn: !!tokens,
-    idToken: tokens?.idToken || null,
-    clerkUserId: claims?.sub || null,
-    email: claims?.email || null,
-    accountRole,
-    persona, setPersona,
-    signIn,
-    switchAccount,
-    loadTokensFromStore,
-    clearSession,
-  }), [tokens, claims, accountRole, persona]);
+  const value = useMemo(
+    () => ({ token, role, email, loading, signInAdmin, signInUser, signOut }),
+    [token, role, email, loading]
+  );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 };
-
-export const useAuthContext = () => useContext(AuthContext);

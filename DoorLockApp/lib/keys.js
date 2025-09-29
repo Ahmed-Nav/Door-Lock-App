@@ -1,45 +1,29 @@
-// DoorLockApp/lib/keys.js
-import * as Keychain from 'react-native-keychain';
+import 'react-native-get-random-values';
 import { p256 } from '@noble/curves/p256';
+import { sha256 } from '@noble/hashes/sha256';
+import * as Keychain from 'react-native-keychain';
+import { Buffer } from 'buffer';
 
-const serviceName = (uid, persona) => `dl:${uid}:${persona}`;
-
-function derivePubRawB64(privBytes) {
-  const pub = p256.getPublicKey(privBytes, false); // uncompressed (65 bytes)
-  return Buffer.from(pub).toString('base64');
-}
-
-export async function ensureKeypair({ clerkUserId, persona }) {
-  const service = serviceName(clerkUserId, persona);
-  const existing = await Keychain.getGenericPassword({ service });
-  if (existing?.password) {
-    const privB64 = existing.password;
-    const pubRawB64 = derivePubRawB64(Buffer.from(privB64, 'base64'));
-    return { privB64, pubRawB64 };
-  }
-  const privBytes = p256.utils.randomPrivateKey();
-  const privB64 = Buffer.from(privBytes).toString('base64');
-  const pubRawB64 = derivePubRawB64(privBytes);
-  await Keychain.setGenericPassword('p256', privB64, {
-    service,
-    accessible: Keychain.ACCESSIBLE.ALWAYS_THIS_DEVICE_ONLY,
-    accessControl: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
+export async function genP256Keypair(name) {
+  const priv = Buffer.from(p256.utils.randomPrivateKey()); // 32B
+  const pub = Buffer.from(p256.getPublicKey(priv, false)); // 65B uncompressed
+  await Keychain.setGenericPassword(`${name}-label`, priv.toString('base64'), {
+    service: name,
   });
-  return { privB64, pubRawB64 };
+  return { privB64: priv.toString('base64'), pubB64: pub.toString('base64') };
 }
 
-export async function getPersonaPrivKeyB64({ clerkUserId, persona }) {
-  const existing = await Keychain.getGenericPassword({
-    service: serviceName(clerkUserId, persona),
-  });
-  return existing?.password || null;
+export async function getPrivateKeyB64(name) {
+  const creds = await Keychain.getGenericPassword({ service: name });
+  if (!creds) return null;
+  return creds.password;
 }
 
-export async function clearAllPersonasForUser(clerkUserId) {
-  await Keychain.resetGenericPassword({
-    service: serviceName(clerkUserId, 'user'),
-  }).catch(() => {});
-  await Keychain.resetGenericPassword({
-    service: serviceName(clerkUserId, 'admin'),
-  }).catch(() => {});
+export async function signP256RawB64(name, msgUint8) {
+  const privB64 = await getPrivateKeyB64(name);
+  if (!privB64) throw new Error('no private key');
+  const priv = Buffer.from(privB64, 'base64');
+  const digest = sha256(msgUint8);
+  const sig = p256.sign(digest, priv, { der: false }); // 64B raw r||s
+  return Buffer.from(sig).toString('base64');
 }
