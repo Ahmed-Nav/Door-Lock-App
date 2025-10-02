@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const crypto = require("crypto");
-const { default: verifyClerkOidc } = require("../middleware/verifyClerkOidc");
+const verifyClerkOidc  = require("../middleware/verifyClerkOidc");
 const UserKey = require("../models/UserKey");
 
 const kidOf = (pubB64) =>
