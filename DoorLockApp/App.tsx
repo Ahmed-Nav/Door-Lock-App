@@ -38,6 +38,7 @@ function Router() {
         <Stack.Screen name="RebuildAcl" component={RebuildAclScreen} options={{ title: 'Rebuild ACL' }} />
         <Stack.Screen name="Groups" component={GroupsScreen} options={{ title: 'Groups' }} />
         <Stack.Screen name="GroupDetail" component={GroupDetail} options={{ title: 'Group Detail' }} />
+        <Stack.Screen name="Unlock" component={UnlockScreen} />
       </Stack.Navigator>
     );
   }

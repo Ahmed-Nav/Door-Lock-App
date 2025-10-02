@@ -1,6 +1,6 @@
 // DoorLockApp/auth/AuthContext.tsx
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { authorize } from 'react-native-app-auth';
+import { AuthConfiguration, authorize } from 'react-native-app-auth';
 import jwtDecode from 'jwt-decode';
 import * as Keychain from 'react-native-keychain';
 import { getMe } from '../services/apiService';
@@ -36,24 +36,28 @@ const REDIRECT_URL = 'com.doorlockapp://callback';
 const ADMIN_CLIENT_ID = '5si8xSwPl6n2oQLY';
 const USER_CLIENT_ID  = '2JbPx2I2fknWbmf8';
 
-const cfg = (clientId: string) => ({
+const cfg = (clientId: string): AuthConfiguration => ({
   clientId,
   redirectUrl: REDIRECT_URL,
   scopes: ['openid', 'email', 'profile'],
   serviceConfiguration: {
     authorizationEndpoint: `${ISSUER}/oauth/authorize`,
     tokenEndpoint: `${ISSUER}/oauth/token`,
+    revocationEndpoint:   `${ISSUER}/oauth/revoke`,
+  },
+  additionalParameters: {
+    prompt: 'select_account',     
   },
 });
 
-// ── Minimal email decode helper (unchanged)
+
 function decodeEmail(idToken?: string | null) {
   try { return idToken ? (jwtDecode as any)(idToken)?.email ?? null : null; }
   catch { return null; }
 }
 
-// ── Keychain helpers (NEW)
-const KC_SERVICE = 'doorlock-auth-v1'; // change if you need to reset all devices
+
+const KC_SERVICE = 'doorlock-auth-v1'; 
 
 type SavedSession = { token: string; role: Role; email: string | null };
 
@@ -81,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [email, setEmail]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Silent restore on mount (NEW)
+  
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -90,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (sess?.token) {
           setToken(sess.token);
           setEmail(sess.email ?? decodeEmail(sess.token));
-          // Confirm role with backend; fall back to stored role if 401/offline
+          
           const me = await getMe(sess.token).catch(() => null);
           setRole(me?.user?.role ?? sess.role ?? null);
         }
@@ -115,14 +119,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(raw);
       setEmail(emailFromToken);
 
-      // Ask backend who we are (and ensure user row exists)
+     
       const me = await getMe(raw);
       const resolvedRole: Role = me?.user?.role ?? null;
       setRole(resolvedRole);
 
       try { await registerDeviceKeyWithServer(raw); } catch {}
 
-      // Persist (NEW)
+      
       await saveSession({ token: raw, role: resolvedRole, email: emailFromToken ?? null });
     } finally {
       setLoading(false);
@@ -146,4 +150,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 };
-//pending

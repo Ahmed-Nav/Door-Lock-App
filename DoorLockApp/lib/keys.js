@@ -5,7 +5,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import * as Keychain from 'react-native-keychain';
 import { Buffer } from 'buffer';
 import axios from 'axios';
-import { API_URL } from '../services/apiService'; // or central config
+import { API_URL }  from '../services/apiService'; 
 
 const KC_SERVICE = 'door-lock-device-key-v1';
 
@@ -50,7 +50,7 @@ export async function registerDeviceKeyWithServer(token) {
       { headers: { Authorization: `Bearer ${token}` } },
     );
   } catch (e) {
-    // non-fatal – user can still operate if registration was already done
+    
     console.log(
       'key register skipped/failed:',
       e?.response?.data || e?.message,
