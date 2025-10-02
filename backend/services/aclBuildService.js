@@ -5,11 +5,25 @@ const User = require("../models/User");
 const UserKey = require("../models/UserKey");
 const AclVersion = require("../models/AclVersion");
 
-const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM;
-if (!ADMIN_PRIV_PEM)
-  console.warn("ADMIN_PRIV_PEM missing (ACL signing will fail)");
+function loadAdminPrivPem() {
+  const pem = process.env.ADMIN_PRIV_PEM;
+  if (!pem) throw new Error("ADMIN_PRIV_PEM missing");
+  
+  return pem.replace(/\\n/g, "\n");
+}
 
-const b64raw = (buf) => Buffer.from(buf).toString("base64");
+function signPayload(payloadObj) {
+  const payloadJson = JSON.stringify(payloadObj);
+
+  const keyPem = loadAdminPrivPem();
+  // raw 64-byte (r||s) using ieee-p1363
+  const sigRaw = crypto.sign(null, Buffer.from(payloadJson, "utf8"), {
+    key: crypto.createPrivateKey(keyPem),
+    dsaEncoding: "ieee-p1363",
+  });
+
+  return { payloadJson, sigB64: Buffer.from(sigRaw).toString("base64") };
+}
 
 async function collectUsersForLock(lockId) {
   const groups = await Group.find({ lockIds: lockId }).lean();
@@ -56,15 +70,7 @@ async function nextVersion(lockId) {
   return (last?.version || 0) + 1;
 }
 
-function signPayload(payloadJson) {
-  
-  const key = crypto.createPrivateKey(ADMIN_PRIV_PEM);
-  const raw = crypto.sign(null, Buffer.from(payloadJson, "utf8"), {
-    key,
-    dsaEncoding: "ieee-p1363",
-  });
-  return b64raw(raw);
-}
+
 
 async function buildAndStore(lockId) {
   const { users, missing } = await collectUsersForLock(lockId);
