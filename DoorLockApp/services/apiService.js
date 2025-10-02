@@ -1,10 +1,15 @@
 // DoorLockApp/services/apiService.js
 import axios from 'axios';
 
-const API_URL = 'https://door-lock-app.onrender.com/api';
+export const API_URL = 'https://door-lock-app.onrender.com/api';
+
+export const api = axios.create({
+  baseURL: API_URL,
+  timeout: 10000,
+});
 
 // --- helpers ---
-const auth = token => ({
+export const auth = token => ({
   headers: { Authorization: `Bearer ${token}` },
 });
 

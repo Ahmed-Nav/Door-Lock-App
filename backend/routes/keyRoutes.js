@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const crypto = require("crypto");
 const verifyClerkOidc  = require("../middleware/verifyClerkOidc");
+const { connectDB } = require("../services/db");
 const UserKey = require("../models/UserKey");
 
 const kidOf = (pubB64) =>
@@ -9,19 +10,49 @@ const kidOf = (pubB64) =>
 
 router.post("/keys/register", verifyClerkOidc, async (req, res) => {
   try {
+
+    await connectDB();
+
     const { pubB64, label } = req.body || {};
     if (!pubB64) return res.status(400).json({ ok: false, err: "missing-pub" });
 
+    if (pubB64.length < 80) {
+      return res.status(400).json({ ok: false, err: "bad-pub-format" });
+    }
+
     const kid = kidOf(pubB64);
+
+    const existing = await UserKey.findOne({ kid }).lean();
+    if (existing && existing.userId !== req.userId) {
+      return res
+        .status(409)
+        .json({ ok: false, err: "kid-owned-by-other-user" });
+    }
+
     const doc = await UserKey.findOneAndUpdate(
       { kid },
-      { userId: req.userId, pubB64, label, active: true },
+      {
+        userId: req.userId,
+        pubB64,
+        label,
+        active: true,
+        updatedAt: new Date(),
+      },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     res.json({ ok: true, kid: doc.kid });
   } catch (e) {
-    console.error("register key failed:", e);
-    res.status(500).json({ ok: false, err: "server-error" });
+    console.error("keys/register error:", {
+      message: e?.message,
+      code: e?.code,
+      name: e?.name,
+      stack: e?.stack,
+    });
+    
+    if (e?.code === 11000) {
+      return res.status(409).json({ ok: false, err: "duplicate-key" });
+    }
+    return res.status(500).json({ ok: false, err: "server-error" });
   }
 });
 

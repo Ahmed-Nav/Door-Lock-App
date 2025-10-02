@@ -5,7 +5,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import * as Keychain from 'react-native-keychain';
 import { Buffer } from 'buffer';
 import axios from 'axios';
-import { API_URL }  from '../services/apiService'; 
+import { api } from '../services/apiService'; 
 
 const KC_SERVICE = 'door-lock-device-key-v1';
 
@@ -44,17 +44,25 @@ export async function signChallengeB64(challengeU8) {
 export async function registerDeviceKeyWithServer(token) {
   const { pubB64, kid } = await getOrCreateDeviceKey();
   try {
-    await axios.post(
-      `${API_URL}/keys/register`,
+    await api.post(
+      `/keys/register`,
       { pubB64 },
       { headers: { Authorization: `Bearer ${token}` } },
     );
   } catch (e) {
     
-    console.log(
-      'key register skipped/failed:',
-      e?.response?.data || e?.message,
-    );
+    const data = e?.response?.data;
+    const code = e?.code;
+    const url = e?.config?.baseURL
+      ? `${e.config.baseURL}${e.config.url}`
+      : e?.config?.url;
+    console.log('key register failed:', {
+      url,
+      code,
+      status: e?.response?.status,
+      data,
+      message: e?.message,
+    });
   }
   return kid;
 }

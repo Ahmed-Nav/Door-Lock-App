@@ -1,6 +1,6 @@
 // DoorLockApp/auth/AuthContext.tsx
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { AuthConfiguration, authorize } from 'react-native-app-auth';
+import { AuthConfiguration, authorize, revoke } from 'react-native-app-auth';
 import jwtDecode from 'jwt-decode';
 import * as Keychain from 'react-native-keychain';
 import { getMe } from '../services/apiService';
@@ -46,7 +46,8 @@ const cfg = (clientId: string): AuthConfiguration => ({
     revocationEndpoint:   `${ISSUER}/oauth/revoke`,
   },
   additionalParameters: {
-    prompt: 'select_account',     
+    prompt: 'login',   
+    max_age: '0',    
   },
 });
 
@@ -137,11 +138,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInUser  = () => doSignIn(USER_CLIENT_ID);
 
   const signOut = async () => {
+  setLoading(true);
+  try {
+    if (token) {
+      await revoke(
+        {
+          ...cfg(role === 'admin' ? ADMIN_CLIENT_ID : USER_CLIENT_ID),
+        },
+        { tokenToRevoke: token, sendClientId: true }
+      ).catch(() => {});
+    }
+  } finally {
+    await clearSession(); // your Keychain wipe
     setToken(null);
     setRole(null);
     setEmail(null);
-    await clearSession();
-  };
+    setLoading(false);
+  }
+};
 
   const value = useMemo(
     () => ({ token, role, email, loading, signInAdmin, signInUser, signOut }),
