@@ -39,6 +39,13 @@ export default function AdminHomeScreen({ navigation }) {
       </TouchableOpacity>
 
       <TouchableOpacity
+        style={s.btn}
+        onPress={() => navigation.navigate('Unlock')}
+      >
+        <Text style={s.bt}>Unlock</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
         style={[s.btn, { backgroundColor: '#8B0000', marginTop: 24 }]}
         onPress={signOut}
       >

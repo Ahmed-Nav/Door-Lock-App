@@ -4,6 +4,7 @@ import { authorize } from 'react-native-app-auth';
 import jwtDecode from 'jwt-decode';
 import * as Keychain from 'react-native-keychain';
 import { getMe } from '../services/apiService';
+import { registerDeviceKeyWithServer } from '../lib/keys';
 
 type Role = 'admin' | 'user' | null;
 
@@ -119,6 +120,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const resolvedRole: Role = me?.user?.role ?? null;
       setRole(resolvedRole);
 
+      try { await registerDeviceKeyWithServer(raw); } catch {}
+
       // Persist (NEW)
       await saveSession({ token: raw, role: resolvedRole, email: emailFromToken ?? null });
     } finally {
@@ -143,3 +146,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 };
+//pending

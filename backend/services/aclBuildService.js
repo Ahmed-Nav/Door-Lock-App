@@ -2,10 +2,11 @@
 const crypto = require("crypto");
 const Group = require("../models/Group");
 const User = require("../models/User");
+const UserKey = require("../models/UserKey");
 const AclVersion = require("../models/AclVersion");
 const Lock = require("../models/Lock");
 
-const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM; // keep as one-line PEM in .env or read file
+const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM; 
 if (!ADMIN_PRIV_PEM)
   console.warn("ADMIN_PRIV_PEM missing (ACL signing will fail)");
 
@@ -13,17 +14,13 @@ function b64raw(buf) {
   return Buffer.from(buf).toString("base64");
 }
 
-// collect users for a lock by group membership
+
 async function collectUsersForLock(lockId) {
   const groups = await Group.find({ lockIds: lockId }).lean();
   const userIds = [...new Set(groups.flatMap((g) => g.userIds.map(String)))];
   if (userIds.length === 0) return [];
-  const users = await User.find({ _id: { $in: userIds } }).lean();
-  // We’ll use email as kid for now; you may have a separate kid field later.
-  // Require users to have `pubB64` (their 65-byte uncompressed key in base64)
-  return users
-    .filter((u) => u.pubB64)
-    .map((u) => ({ kid: u.email, pub: u.pubB64 }));
+  const keys = await UserKey.find({ userId: { $in: userIds },active: true }).select({ kid: 1, pubB64: 1 }).lean();
+  return keys.map(k => ({ kid: k.kid, pubB64: k.pubB64 }));
 }
 
 async function nextVersion(lockId) {
