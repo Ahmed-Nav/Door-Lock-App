@@ -4,23 +4,49 @@ const Group = require("../models/Group");
 const User = require("../models/User");
 const UserKey = require("../models/UserKey");
 const AclVersion = require("../models/AclVersion");
-const Lock = require("../models/Lock");
 
-const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM; 
+const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM;
 if (!ADMIN_PRIV_PEM)
   console.warn("ADMIN_PRIV_PEM missing (ACL signing will fail)");
 
-function b64raw(buf) {
-  return Buffer.from(buf).toString("base64");
-}
-
+const b64raw = (buf) => Buffer.from(buf).toString("base64");
 
 async function collectUsersForLock(lockId) {
   const groups = await Group.find({ lockIds: lockId }).lean();
-  const userIds = [...new Set(groups.flatMap((g) => g.userIds.map(String)))];
-  if (userIds.length === 0) return [];
-  const keys = await UserKey.find({ userId: { $in: userIds },active: true }).select({ kid: 1, pubB64: 1 }).lean();
-  return keys.map(k => ({ kid: k.kid, pubB64: k.pubB64 }));
+
+  
+  const memberIds = [
+    ...new Set(
+      groups.flatMap((g) => (g.userIds || []).map((id) => String(id)))
+    ),
+  ];
+
+  
+
+  if (memberIds.length === 0) return { users: [], missing: [] };
+  
+
+  
+  const members = await User.find(
+    { _id: { $in: memberIds } } 
+  )
+    .select({ clerkId: 1, email: 1 })
+    .lean();
+
+  const clerkIds = members.map((u) => u.clerkId).filter(Boolean);
+
+  
+  const keys = await UserKey.find({ userId: { $in: clerkIds }, active: true })
+    .select({ kid: 1, pubB64: 1, userId: 1 })
+    .lean();
+
+  const keyByClerk = new Map(keys.map((k) => [k.userId, k]));
+  const missing = members
+    .filter((u) => !keyByClerk.has(u.clerkId))
+    .map((u) => ({ email: u.email, clerkId: u.clerkId }));
+
+  const users = keys.map((k) => ({ kid: k.kid, pubB64: k.pubB64 }));
+  return { users, missing };
 }
 
 async function nextVersion(lockId) {
@@ -31,23 +57,25 @@ async function nextVersion(lockId) {
 }
 
 function signPayload(payloadJson) {
+  
   const key = crypto.createPrivateKey(ADMIN_PRIV_PEM);
-  // ECDSA P-256 with raw r||s (64 bytes)
-  const derSig = crypto.sign(null, Buffer.from(payloadJson, "utf8"), {
-    key,
-    dsaEncoding: "der",
-  });
-  // Convert DER -> raw (r||s) 32+32; quick parse:
-  // node >=16 supports dsaEncoding:'ieee-p1363' to get raw directly:
   const raw = crypto.sign(null, Buffer.from(payloadJson, "utf8"), {
     key,
     dsaEncoding: "ieee-p1363",
   });
-  return b64raw(raw); // base64 for firmware
+  return b64raw(raw);
 }
 
 async function buildAndStore(lockId) {
-  const users = await collectUsersForLock(lockId);
+  const { users, missing } = await collectUsersForLock(lockId);
+
+  if (missing.length) {
+    const err = new Error("missing-userpubs");
+    err.code = "MISSING_USERPUBS";
+    err.missing = missing;
+    throw err;
+  }
+
   const version = await nextVersion(lockId);
   const payload = { lockId, version, users };
   const payloadJson = JSON.stringify(payload);
@@ -59,6 +87,7 @@ async function buildAndStore(lockId) {
     { lockId, version, envelope, updatedAt: new Date() },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+
   return envelope;
 }
 
