@@ -94,13 +94,13 @@ export const deleteGroup = async (token, groupId) => {
 };
 
 // --- Claim (admin-only) ---
-export const claimLockOnServer = async (token, { lockId, claimCode }) => {
+export const claimLockOnServer = async (token, { lockId, claimCode, kid }) => {
   const r = await axios.post(
     `${API_URL}/locks/${lockId}/claim`,
-    { claimCode },
+    { claimCode, kid },
     auth(token),
   );
-  return r.data; // { ok:true } or { ok:false, err }
+  return r.data;
 };
 
 // --- ACL (admin-only) ---

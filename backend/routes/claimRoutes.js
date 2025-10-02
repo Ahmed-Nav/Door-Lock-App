@@ -3,6 +3,7 @@ const express = require("express");
 const crypto = require("crypto");
 const { connectDB } = require("../services/db");
 const Lock = require("../models/Lock");
+const Group = require("../models/Group");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
 const { getOrCreateLockKey } = require("../services/keyService");
@@ -21,11 +22,16 @@ router.post(
   async (req, res) => {
     try {
       await connectDB();
-      const lockId = Number(req.params.lockId);
-      const claimCode = String(req.body?.claimCode || "");
 
-      if (!lockId || !claimCode)
+      const lockId = Number(req.params.lockId || 0);
+      const claimCode = String(req.body?.claimCode || "").trim();
+      
+      const kid =
+        typeof req.body?.kid === "string" ? req.body.kid.trim() : null;
+
+      if (!lockId || !claimCode) {
         return res.status(400).json({ ok: false, err: "missing-fields" });
+      }
 
       const lock = await Lock.findOne({ lockId }).lean();
       if (!lock)
@@ -33,6 +39,7 @@ router.post(
       if (lock.claimed)
         return res.status(409).json({ ok: false, err: "already-claimed" });
 
+      
       const want = (lock.claimCodeHash || "").trim();
       const gotHex = sha256Hex(claimCode);
       const gotB64 = sha256B64(claimCode);
@@ -41,18 +48,38 @@ router.post(
         want.replace(/=+$/, "") === gotB64.replace(/=+$/, "");
       if (!match) return res.status(403).json({ ok: false, err: "bad-claim" });
 
-      // Ensure a server-side keypair exists for this lock:
+      
       const k = await getOrCreateLockKey(lockId);
 
-      // Do NOT mark claimed here; mark claimed after BLE Owner write succeeds,
-      // or keep as-is if your app marks claimed after the BLE success roundtrip.
-      // Keeping your previous logic:
+      
       await Lock.updateOne({ lockId }, { $set: { claimed: true } });
 
-      // Return the adminPub the phone must write into the lock
+      
+      const ownersName = `Owners-${lockId}`;
+      const g = await Group.findOneAndUpdate(
+        { name: ownersName },
+        {
+          $setOnInsert: {
+            name: ownersName,
+            userIds: [req.userId],
+            lockIds: [lockId],
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+     
+      await Group.updateOne(
+        { _id: g._id },
+        { $addToSet: { userIds: req.userId, lockIds: lockId } }
+      );
+
+      
+
+      
       return res.json({ ok: true, adminPub: k.adminPubB64 });
     } catch (e) {
-      return res.status(500).json({ ok: false, err: e.message });
+      console.error("POST /locks/:lockId/claim failed:", e);
+      return res.status(500).json({ ok: false, err: "server-error" });
     }
   }
 );

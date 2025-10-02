@@ -9,19 +9,20 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
-import { useRoute, useNavigation } from '@react-navigation/native'; // <-- add
+import { useRoute, useNavigation } from '@react-navigation/native'; 
 import { claimLockOnServer } from '../services/apiService';
+import { getOrCreateDeviceKey } from '../lib/keys';
 
 export default function ClaimLockScreen() {
   const { token, role, email } = useAuth();
-  const route = useRoute(); // <-- add
-  const navigation = useNavigation(); // <-- add
+  const route = useRoute(); 
+  const navigation = useNavigation(); 
 
   const [lockId, setLockId] = useState('');
   const [claimCode, setClaimCode] = useState('');
   const [status, setStatus] = useState('Idle');
 
-  // Prefill when returning from scanner
+  
   useEffect(() => {
     const p = route?.params || {};
     if (p?.lockId) setLockId(String(p.lockId));
@@ -35,9 +36,11 @@ export default function ClaimLockScreen() {
         return;
       }
       setStatus('Claiming on server…');
+      const { pubB64, kid } = await getOrCreateDeviceKey();
       const res = await claimLockOnServer(token, {
         lockId: Number(lockId),
         claimCode,
+        kid
       });
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
       setStatus('Claimed');
@@ -60,7 +63,7 @@ export default function ClaimLockScreen() {
         {email ? `Signed in as ${email} (${role})` : 'Not signed in'}
       </Text>
 
-      {/* NEW: Scan button */}
+      
       <TouchableOpacity
         style={[s.btn, { backgroundColor: '#7B1FA2' }]}
         onPress={() => navigation.navigate('ClaimQr')}

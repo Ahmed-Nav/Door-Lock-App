@@ -12,9 +12,10 @@ export default function SignInScreen() {
     try {
       const { me } = await signInWithClient(clientId);
       const role = me?.user?.role;
-      if (role === 'admin')
-        nav.reset({ index: 0, routes: [{ name: 'Claim' }] });
-      else nav.reset({ index: 0, routes: [{ name: 'Unlock' }] });
+      nav.reset({
+        index: 0,
+        routes: [{ name: role === 'admin' ? 'AdminHome' : 'Unlock' }],
+      });
     } catch (e) {
       Alert.alert(
         'Sign in failed',
