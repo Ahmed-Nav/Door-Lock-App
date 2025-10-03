@@ -13,6 +13,34 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { useAuth } from '../auth/AuthContext';
 import { rebuildAcl } from '../services/apiService';
 
+function coerceSigToB64(sig) {
+  if (!sig) return null;
+
+  
+  if (typeof sig === 'string') return sig;
+
+  
+  if (sig && typeof sig === 'object' && typeof sig.sigB64 === 'string') {
+    return sig.sigB64;
+  }
+
+  
+  if (
+    sig &&
+    typeof sig === 'object' &&
+    sig.type === 'Buffer' &&
+    Array.isArray(sig.data)
+  ) {
+    try {
+      return Buffer.from(sig.data).toString('base64');
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export default function RebuildAclScreen() {
   const { token, role } = useAuth();
   const [lockId, setLockId] = useState('101');
@@ -21,11 +49,22 @@ export default function RebuildAclScreen() {
 
   const go = async () => {
     try {
+      if (!token) return Alert.alert('Not signed in', 'Please sign in first.');
       if (role !== 'admin') return Alert.alert('Forbidden', 'Admin only.');
       setStatus('Rebuilding…');
+      setResult(null);
       const res = await rebuildAcl(token, Number(lockId));
       if (!res?.ok) throw new Error(res?.err || 'rebuild-failed');
-      setResult(res);
+      const normalized = { ...res };
+      if (normalized.envelope) {
+        const b64 = coerceSigToB64(normalized.envelope.sig);
+        normalized.envelope = {
+          ...normalized.envelope,
+          sig: b64 ?? normalized.envelope.sig,
+        };
+      }
+
+      setResult(normalized);
       setStatus('Done');
     } catch (e) {
       setStatus('Failed');
@@ -44,11 +83,11 @@ export default function RebuildAclScreen() {
     } catch {}
   };
 
-  const sigLen = result?.envelope?.sig
-    ? Buffer.from(result.envelope.sig, 'base64').length
-    : 0;
-  const users = result?.envelope?.payload?.users || [];
-  const version = result?.envelope?.payload?.version;
+  const envelope = result?.envelope || null;
+  const sigB64 = coerceSigToB64(envelope?.sig);
+  const sigLen = sigB64 ? Buffer.from(sigB64, 'base64').length : 0;
+  const users = envelope?.payload?.users || [];
+  const version = envelope?.payload?.version;
 
   return (
     <View style={s.c}>

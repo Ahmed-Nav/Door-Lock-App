@@ -9,10 +9,11 @@ import AdminHomeScreen from './components/AdminHomeScreen';
 import ClaimLockScreen from './components/ClaimLockScreen';
 import PushAclScreen from './components/PushAclScreen';
 import UnlockScreen from './components/UnlockScreen';
-import RebuildAclScreen from './components/RebuildAclScreen';  // NEW
+import RebuildAclScreen from './components/RebuildAclScreen';  
 import GroupsScreen from './components/GroupsScreen';
-import GroupDetail from './components/GroupDetail';          // NEW
-import ClaimQrScreen from './components/ClaimQrScreen';        // NEW (used from Claim)
+import GroupDetail from './components/GroupDetail';          
+import ClaimQrScreen from './components/ClaimQrScreen';        
+import OwnershipScreen from './components/OwnershipScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -39,6 +40,7 @@ function Router() {
         <Stack.Screen name="Groups" component={GroupsScreen} options={{ title: 'Groups' }} />
         <Stack.Screen name="GroupDetail" component={GroupDetail} options={{ title: 'Group Detail' }} />
         <Stack.Screen name="Unlock" component={UnlockScreen} />
+        <Stack.Screen name="Ownership" component={OwnershipScreen} options={{ title: 'Ownership' }} />
       </Stack.Navigator>
     );
   }

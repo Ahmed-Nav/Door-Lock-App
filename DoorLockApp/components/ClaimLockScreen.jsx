@@ -22,6 +22,7 @@ export default function ClaimLockScreen() {
   const [claimCode, setClaimCode] = useState('');
   const [status, setStatus] = useState('Idle');
 
+ 
   
   useEffect(() => {
     const p = route?.params || {};
@@ -45,6 +46,10 @@ export default function ClaimLockScreen() {
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
       setStatus('Claimed');
       Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
+      navigation.replace('Ownership', {
+        lockId: Number(lockId),
+        claimCode: claimCode.trim(),
+      });
     } catch (e) {
       setStatus('Claim Failed');
       const err = e?.response?.data?.err || e?.message;

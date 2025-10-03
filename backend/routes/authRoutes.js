@@ -3,6 +3,7 @@ const router = require("express").Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { connectDB } = require("../services/db");
 const User = require("../models/User");
+const { requireAdmin } = require("../middleware/requireRole");
 
 router.get("/me", verifyClerkOidc, async (req, res) => {
   try {
@@ -30,5 +31,22 @@ router.get("/me", verifyClerkOidc, async (req, res) => {
     res.status(500).json({ ok: false, err: "server-error" });
   }
 });
+
+router.get(
+  "/auth/admin/pub",
+  verifyClerkOidc,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const pub = (process.env.ADMIN_PUB_RAW_B64 || "").trim();
+      if (!pub)
+        return res.status(500).json({ ok: false, err: "admin-pub-missing" });
+      return res.json({ ok: true, pub });
+    } catch (e) {
+      console.error("GET /auth/admin/pub failed:", e);
+      return res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
 
 module.exports = router;
