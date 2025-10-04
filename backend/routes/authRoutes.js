@@ -33,7 +33,7 @@ router.get("/me", verifyClerkOidc, async (req, res) => {
 });
 
 router.get(
-  "/auth/admin/pub",
+  "/admin/pub",
   verifyClerkOidc,
   requireAdmin,
   async (req, res) => {
