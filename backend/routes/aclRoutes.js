@@ -1,13 +1,12 @@
-// backend/routes/aclRoutes.js
+// backend/routes/aclRoutes.js (excerpt)
 const express = require("express");
 const { connectDB } = require("../services/db");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
-const { buildAndStore } = require("../services/aclBuildService"); // <-- NEW
+const { buildAndStore } = require("../services/aclBuildService");
 
 const router = express.Router();
 
-// POST /api/locks/:lockId/acl/rebuild
 router.post(
   "/locks/:lockId/acl/rebuild",
   verifyClerkOidc,
@@ -19,11 +18,10 @@ router.post(
       if (!lockId)
         return res.status(400).json({ ok: false, err: "bad-lockId" });
 
-      const envelope = await buildAndStore(lockId); // <-- use the new service
+      const envelope = await buildAndStore(lockId);
       return res.json({ ok: true, envelope });
     } catch (e) {
       if (e.code === "MISSING_USERPUBS") {
-        // Service attaches e.missing = [{ email, clerkId }]
         return res
           .status(409)
           .json({ ok: false, err: "missing-userpubs", missing: e.missing });
@@ -34,7 +32,6 @@ router.post(
   }
 );
 
-// GET /api/locks/:lockId/acl/latest (can stay as-is, it just reads)
 router.get(
   "/locks/:lockId/acl/latest",
   verifyClerkOidc,

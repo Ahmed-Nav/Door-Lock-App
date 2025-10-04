@@ -1,96 +1,76 @@
 // backend/services/aclBuildService.js
 const crypto = require("crypto");
 const Group = require("../models/Group");
-const User = require("../models/User");
 const UserKey = require("../models/UserKey");
 const AclVersion = require("../models/AclVersion");
 
-function loadAdminPrivPem() {
-  const pem = process.env.ADMIN_PRIV_PEM;
-  if (!pem) throw new Error("ADMIN_PRIV_PEM missing");
-  
-  return pem.replace(/\\n/g, "\n");
-}
+const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM;
+if (!ADMIN_PRIV_PEM)
+  console.warn("ADMIN_PRIV_PEM missing (ACL signing will fail)");
 
-function signPayload(payloadObj) {
-  const payloadJson = JSON.stringify(payloadObj);
-
-  const keyPem = loadAdminPrivPem();
-  // raw 64-byte (r||s) using ieee-p1363
-  const sigRaw = crypto.sign(null, Buffer.from(payloadJson, "utf8"), {
-    key: crypto.createPrivateKey(keyPem),
-    dsaEncoding: "ieee-p1363",
-  });
-
-  return { payloadJson, sigB64: Buffer.from(sigRaw).toString("base64") };
+// Deterministic JSON so signatures are stable
+function canonicalJson(obj) {
+  const sort = (o) =>
+    Array.isArray(o)
+      ? o.map(sort)
+      : o && typeof o === "object"
+      ? Object.keys(o)
+          .sort()
+          .reduce((a, k) => ((a[k] = sort(o[k])), a), {})
+      : o;
+  return JSON.stringify(sort(obj));
 }
 
 async function collectUsersForLock(lockId) {
-  const groups = await Group.find({ lockIds: lockId }).lean();
-
-  
-  const memberIds = [
-    ...new Set(
-      groups.flatMap((g) => (g.userIds || []).map((id) => String(id)))
-    ),
+  const lid = Number(lockId);
+  const groups = await Group.find({ lockIds: lid }).lean();
+  const userIds = [
+    ...new Set(groups.flatMap((g) => (g.userIds || []).map(String))),
   ];
+  if (userIds.length === 0) return [];
 
-  
+  // Pull active device keys for those users
+  const keys = await UserKey.find(
+    { userId: { $in: userIds }, active: true },
+    { kid: 1, pubB64: 1 }
+  ).lean();
 
-  if (memberIds.length === 0) return { users: [], missing: [] };
-  
-
-  
-  const members = await User.find(
-    { _id: { $in: memberIds } } 
-  )
-    .select({ clerkId: 1, email: 1 })
-    .lean();
-
-  const clerkIds = members.map((u) => u.clerkId).filter(Boolean);
-
-  
-  const keys = await UserKey.find({ userId: { $in: clerkIds }, active: true })
-    .select({ kid: 1, pubB64: 1, userId: 1 })
-    .lean();
-
-  const keyByClerk = new Map(keys.map((k) => [k.userId, k]));
-  const missing = members
-    .filter((u) => !keyByClerk.has(u.clerkId))
-    .map((u) => ({ email: u.email, clerkId: u.clerkId }));
-
-  const users = keys.map((k) => ({ kid: k.kid, pubB64: k.pubB64 }));
-  return { users, missing };
+  // Map to firmware format: pub (not pubB64)
+  return keys.map((k) => ({ kid: k.kid, pub: k.pubB64 }));
 }
 
 async function nextVersion(lockId) {
-  const last = await AclVersion.findOne({ lockId })
+  const last = await AclVersion.findOne({ lockId: Number(lockId) })
     .sort({ version: -1 })
     .lean();
   return (last?.version || 0) + 1;
 }
 
+function signPayload(payloadObj) {
+  if (!ADMIN_PRIV_PEM) throw new Error("no-admin-priv-pem");
+  const payloadJson = canonicalJson(payloadObj);
 
+  // Get raw 64-byte r||s (ieee-p1363)
+  const sigRaw = crypto.sign("sha256", Buffer.from(payloadJson, "utf8"), {
+    key: ADMIN_PRIV_PEM,
+    dsaEncoding: "ieee-p1363",
+  });
+  if (sigRaw.length !== 64) throw new Error("bad-sig-len");
+  return { payloadJson, sigB64: sigRaw.toString("base64") };
+}
 
 async function buildAndStore(lockId) {
-  const { users, missing } = await collectUsersForLock(lockId);
-
-  if (missing.length) {
-    const err = new Error("missing-userpubs");
-    err.code = "MISSING_USERPUBS";
-    err.missing = missing;
-    throw err;
-  }
-
+  const users = await collectUsersForLock(lockId);
   const version = await nextVersion(lockId);
-  const payload = { lockId, version, users };
-  const payloadJson = JSON.stringify(payload);
-  const sig = signPayload(payloadJson);
 
-  const envelope = { sig, payload };
+  const payload = { lockId: Number(lockId), version, users };
+  const { payloadJson, sigB64 } = signPayload(payload);
+
+  const envelope = { sig: sigB64, payload: JSON.parse(payloadJson) };
+
   await AclVersion.findOneAndUpdate(
-    { lockId, version },
-    { lockId, version, envelope, updatedAt: new Date() },
+    { lockId: Number(lockId), version },
+    { lockId: Number(lockId), version, envelope, updatedAt: new Date() },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
