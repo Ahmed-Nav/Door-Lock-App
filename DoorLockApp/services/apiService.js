@@ -128,6 +128,18 @@ export const fetchLatestAcl = async (token, lockId) => {
 
 // --- Admin public key (optional) ---
 export const getAdminPub = async token => {
-  const r = await axios.get(`${API_URL}/auth/admin/pub`, auth(token));
-  return r.data; // { ok:true, pub }
+  try {
+    const r = await axios.get(`${API_URL}/auth/admin/pub`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    return r.data; 
+  } catch (e) {
+    console.log('getAdminPub failed:', {
+      url: `${API_URL}/auth/admin/pub`,
+      status: e?.response?.status,
+      data: e?.response?.data,
+      message: e?.message,
+    });
+    throw e;
+  }
 };
