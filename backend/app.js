@@ -12,6 +12,7 @@ const aclRoutes = require("./routes/aclRoutes");
 const groupRoutes = require("./routes/groupRoutes");
 const keyRoutes = require("./routes/keyRoutes");
 const mfgRoutes = require("./routes/mfgRoutes");
+const lockRoutes = require("./routes/lockRoutes");
 
 
 const app = express();
@@ -21,13 +22,14 @@ app.use(apiLimiter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// mount everything under /api
+
 app.use("/api/auth", authRoutes);
 app.use("/api", claimRoutes);
 app.use("/api", aclRoutes);
 app.use("/api", groupRoutes);
 app.use("/api", keyRoutes);
 app.use("/api", mfgRoutes);
+app.use("/api", lockRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log("backend on :" + PORT));

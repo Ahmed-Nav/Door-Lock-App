@@ -8,24 +8,24 @@ export const api = axios.create({
   timeout: 10000,
 });
 
-// --- helpers ---
+
 export const auth = token => ({
   headers: { Authorization: `Bearer ${token}` },
 });
 
-// -- Auth / me --
+
 export const getMe = async token => {
   const r = await axios.get(`${API_URL}/auth/me`, auth(token));
   return r.data; // { ok:true, user:{id,email,role} }
 };
 
-// (Optional) keep if you still use it somewhere
+
 export const syncUserToBackend = async token => {
   const r = await axios.post(`${API_URL}/auth/sync`, {}, auth(token));
   return r.data;
 };
 
-// --- Groups (admin-only) ---
+
 export const getGroup = async (token, groupId) => {
   const r = await axios.get(`${API_URL}/groups/${groupId}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -98,7 +98,7 @@ export const deleteGroup = async (token, groupId) => {
   return r.data;
 };
 
-// --- Claim (admin-only) ---
+
 export const claimLockOnServer = async (token, { lockId, claimCode, kid }) => {
   const r = await axios.post(
     `${API_URL}/locks/${lockId}/claim`,
@@ -108,14 +108,14 @@ export const claimLockOnServer = async (token, { lockId, claimCode, kid }) => {
   return r.data;
 };
 
-// --- ACL (admin-only) ---
+
 export const rebuildAcl = async (token, lockId) => {
   const r = await axios.post(
     `${API_URL}/locks/${lockId}/acl/rebuild`,
     {},
     auth(token),
   );
-  return r.data; // { ok:true, envelope, ... } or { ok:false, err }
+  return r.data; 
 };
 
 export const fetchLatestAcl = async (token, lockId) => {
@@ -123,10 +123,10 @@ export const fetchLatestAcl = async (token, lockId) => {
     `${API_URL}/locks/${lockId}/acl/latest`,
     auth(token),
   );
-  return r.data; // { ok:true, envelope }
+  return r.data; 
 };
 
-// --- Admin public key (optional) ---
+
 export const getAdminPub = async token => {
   try {
     const r = await axios.get(`${API_URL}/auth/admin/pub`, {
@@ -143,3 +143,19 @@ export const getAdminPub = async token => {
     throw e;
   }
 };
+
+export const listMyLocks = async (token) => {
+  const r = await api.get('/locks/mine', auth(token)); 
+  return r.data;
+}
+
+export async function updateLockName(token, lockId, name) {
+  const r = await api.patch(
+    `/locks/${lockId}`,
+    { name },
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  return r.data;
+}

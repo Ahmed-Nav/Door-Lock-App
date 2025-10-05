@@ -1,5 +1,5 @@
 // DoorLockApp/components/PushAclScreen.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,20 @@ import {
   Platform,
 } from 'react-native';
 import { Buffer } from 'buffer';
+import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { scanAndConnectForLockId, sendAcl } from '../ble/bleManager';
 import { fetchLatestAcl } from '../services/apiService';
 
 export default function PushAclScreen() {
   const { token, role } = useAuth();
-  const [lockId, setLockId] = useState('101');
+  const route = useRoute();
+
+  
+  const ctxLockId = route.params?.lockId ? String(route.params.lockId) : '101';
+  const preEnvelope = route.params?.envelope || null;
+
+  const [lockId, setLockId] = useState(ctxLockId);
   const [text, setText] = useState('');
   const [status, setStatus] = useState('Idle');
 
@@ -38,34 +45,39 @@ export default function PushAclScreen() {
     }
   }
 
-  const getFromServer = async () => {
-    try {
-      if (!token) {
-        Alert.alert('Sign in again', 'Your session is missing/expired.');
-        return;
+  
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setStatus('Preparing ACL…');
+        if (preEnvelope) {
+          if (!alive) return;
+          setText(JSON.stringify(preEnvelope, null, 2));
+          setStatus('Ready');
+          return;
+        }
+        if (!token) throw new Error('No token');
+        const data = await fetchLatestAcl(token, Number(ctxLockId));
+        if (!alive) return;
+        if (!data?.ok || !data?.envelope) throw new Error('no-acl');
+        setText(JSON.stringify(data.envelope, null, 2));
+        setStatus('Ready');
+      } catch (e) {
+        setStatus('Download failed');
+        const err =
+          e?.response?.data?.err || e?.response?.data?.error || e?.message;
+        if (err === 'no-acl') {
+          Alert.alert('No ACL', 'Build access first from the Groups screen.');
+        } else {
+          Alert.alert('Error', String(err));
+        }
       }
-      setStatus('Downloading ACL…');
-      const data = await fetchLatestAcl(token, Number(lockId));
-      if (!data?.ok || !data?.envelope) throw new Error('no-acl');
-
-      setText(JSON.stringify(data.envelope, null, 2));
-      setStatus('Downloaded');
-      Alert.alert('OK', 'Latest ACL downloaded from server.');
-    } catch (e) {
-      const err =
-        e?.response?.data?.err || e?.response?.data?.error || e?.message;
-      setStatus('Download failed');
-      if (err === 'forbidden') {
-        Alert.alert('Not allowed', 'Admin access is required for ACL.');
-      } else if (err === 'Unauthorized' || err === 'No token') {
-        Alert.alert('Sign in again', 'Your session expired.');
-      } else if (err === 'no-acl') {
-        Alert.alert('No ACL', 'No ACL has been uploaded for this lock yet.');
-      } else {
-        Alert.alert('Error', String(err));
-      }
-    }
-  };
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [ctxLockId, token, preEnvelope]);
 
   const push = async () => {
     try {
@@ -74,11 +86,9 @@ export default function PushAclScreen() {
         return;
       }
       if (!text.trim()) {
-        Alert.alert('Paste or fetch ACL envelope first');
+        Alert.alert('No ACL', 'There is no ACL to send.');
         return;
       }
-      setStatus('Scanning…');
-      await ensurePermissions();
 
       const envelope = JSON.parse(text);
       const payloadLockId = Number(envelope?.payload?.lockId);
@@ -90,7 +100,7 @@ export default function PushAclScreen() {
         return;
       }
 
-      // quick checks (helps catch bad base64 before it hits the ESP32)
+      
       console.log(
         'sig bytes:',
         Buffer.from(String(envelope?.sig || ''), 'base64').length,
@@ -100,12 +110,16 @@ export default function PushAclScreen() {
         console.log(`kid ${u?.kid}: pub bytes=${pb.length} first=${pb[0]}`);
       }
 
+      setStatus('Scanning…');
+      await ensurePermissions();
       const device = await scanAndConnectForLockId(Number(lockId));
+
       setStatus('Sending ACL…');
       await sendAcl(device, envelope);
       await device.cancelConnection();
+
       setStatus('ACL Sent');
-      Alert.alert('ACL Sent');
+      Alert.alert('Done', 'ACL sent to the lock.');
     } catch (error) {
       console.log(error);
       setStatus('ACL Failed');
@@ -125,17 +139,12 @@ export default function PushAclScreen() {
         keyboardType="numeric"
       />
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={getFromServer}>
-          <Text style={s.btxt}>Get Latest From Server</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.btn, { backgroundColor: '#7B1FA2', flex: 1 }]}
-          onPress={push}
-        >
-          <Text style={s.btxt}>Send to Lock</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
+        onPress={push}
+      >
+        <Text style={s.btxt}>Send to Lock</Text>
+      </TouchableOpacity>
 
       <TextInput
         style={s.box}
@@ -144,6 +153,7 @@ export default function PushAclScreen() {
         placeholder="ACL_envelope.json"
         multiline
       />
+
       <Text style={s.status}>Status: {status}</Text>
     </View>
   );
@@ -167,10 +177,10 @@ const s = StyleSheet.create({
     textAlignVertical: 'top',
   },
   btn: {
-    backgroundColor: '#444',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
+    backgroundColor: '#444',
   },
   btxt: { color: 'white', fontWeight: '600' },
   status: { color: '#bbb', marginTop: 12 },

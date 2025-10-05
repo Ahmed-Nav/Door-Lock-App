@@ -9,20 +9,28 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native'; 
 import { useAuth } from '../auth/AuthContext';
-import { listGroups, createGroup } from '../services/apiService';
+import {
+  listGroups,
+  createGroup,
+  rebuildAcl, 
+} from '../services/apiService';
 
 export default function GroupsScreen() {
   const { token, role } = useAuth();
   const nav = useNavigation();
+  const route = useRoute();
+  const ctxLockId = route.params?.lockId ?? null; 
+  const ctxLockName = route.params?.lockName ?? null; 
   const [groups, setGroups] = useState([]);
   const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false); 
 
   async function load() {
     try {
       if (role !== 'admin') return;
-      const res = await listGroups(token); // ✅ correct API for list
+      const res = await listGroups(token);
       setGroups(res?.groups || []);
     } catch (e) {
       Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
@@ -47,9 +55,80 @@ export default function GroupsScreen() {
     }
   };
 
+  
+  const onUpdateAccess = async () => {
+    if (busy) return;
+    if (!ctxLockId) {
+      Alert.alert(
+        'Pick a lock',
+        'Open this screen via “Manage Access” on a lock.',
+      );
+      return;
+    }
+    try {
+      setBusy(true);
+      const res = await rebuildAcl(token, Number(ctxLockId));
+      if (!res?.ok) {
+        if (res?.err === 'missing-userpubs') {
+          const missingList = (res.missing || [])
+            .map(m => m.email || m.id)
+            .join('\n• ');
+          return Alert.alert(
+            'Missing device keys',
+            `Some users don’t have device keys yet:\n\n• ${missingList}`,
+          );
+        }
+        throw new Error(res?.err || 'rebuild-failed');
+      }
+
+      Alert.alert(
+        'Access updated',
+        `ACL v${res.envelope?.payload?.version} built for Lock #${ctxLockId}.`,
+        [
+          {
+            text: 'Send to Lock',
+            onPress: () =>
+              nav.navigate('PushAcl', {
+                lockId: Number(ctxLockId),
+                envelope: res.envelope, 
+              }),
+          },
+          { text: 'Close' },
+        ],
+      );
+    } catch (e) {
+      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <View style={s.c}>
       <Text style={s.t}>Groups</Text>
+
+      
+      {ctxLockId ? (
+        <Text style={{ color: '#bbb', marginBottom: 6 }}>
+          Managing access for Lock #{ctxLockId}
+          {ctxLockName ? ` (${ctxLockName})` : ''}
+        </Text>
+      ) : null}
+
+     
+      {ctxLockId ? (
+        <TouchableOpacity
+          style={[s.btn, { backgroundColor: '#7B1FA2', marginBottom: 6 }]}
+          onPress={onUpdateAccess}
+          disabled={busy}
+        >
+          <Text style={s.bt}>
+            {busy
+              ? 'Building ACL…'
+              : `Update user access for Lock #${ctxLockId}`}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
 
       <View style={s.row}>
         <TextInput
@@ -70,7 +149,7 @@ export default function GroupsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={s.card}
-            onPress={() => nav.navigate('GroupDetail', { groupId: item._id })} // ➜ manage members here
+            onPress={() => nav.navigate('GroupDetail', { groupId: item._id })}
           >
             <Text style={s.cardTitle}>{item.name}</Text>
             <Text style={s.cardMeta}>
@@ -96,9 +175,9 @@ const s = StyleSheet.create({
     padding: 12,
   },
   btn: {
-    backgroundColor: '#7B1FA2',
+    backgroundColor: '#1d1d25',
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
   bt: { color: 'white', fontWeight: '600' },
