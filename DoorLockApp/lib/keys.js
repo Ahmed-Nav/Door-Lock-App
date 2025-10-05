@@ -35,10 +35,19 @@ export async function getOrCreateDeviceKey() {
 
 export async function signChallengeB64(challengeU8) {
   const { privB64 } = await getOrCreateDeviceKey();
-  const privHex = hexOf(Buffer.from(privB64, 'base64'));
-  const h = sha256(challengeU8);
-  const sig = p256.sign(h, privHex, { lowS: true }).toRawBytes(); // 64B r||s
-  return Buffer.from(sig).toString('base64');
+  const privHex = Buffer.from(privB64, 'base64').toString('hex');
+  const h32 = sha256(challengeU8);
+  const sigAny = p256.sign(h32, privHex, { lowS: true });
+  const raw =
+    sigAny instanceof Uint8Array
+      ? sigAny
+      : sigAny?.toRawBytes?.() ?? sigAny?.toCompactRawBytes?.() ?? null;
+
+  if (!raw || !(raw instanceof Uint8Array) || raw.length !== 64) {
+    throw new Error('bad-signature-output');
+  }
+
+  return Buffer.from(raw).toString('base64');
 }
 
 export async function registerDeviceKeyWithServer(token) {
