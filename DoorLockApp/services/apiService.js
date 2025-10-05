@@ -144,10 +144,10 @@ export const getAdminPub = async token => {
   }
 };
 
-export const listMyLocks = async (token) => {
-  const r = await api.get('/locks/mine', auth(token)); 
-  return r.data;
-}
+export const listLocks = async token => {
+  const r = await api.get('/locks', auth(token));
+  return r.data; 
+};
 
 export async function updateLockName(token, lockId, name) {
   const r = await api.patch(

@@ -19,6 +19,7 @@ import ClaimLockScreen from './components/ClaimLockScreen';
 import ClaimQrScreen from './components/ClaimQrScreen';
 import RebuildAclScreen from './components/RebuildAclScreen';
 import OwnershipScreen from './components/OwnershipScreen';
+import LocksHomeScreen from './components/LocksHomeScreen';
 
 
 export type RootStackParamList = {
@@ -29,7 +30,7 @@ export type RootStackParamList = {
   Unlock: undefined;
 
 
-  AdminHome: undefined;
+  LocksHome: undefined;
   ClaimLock: undefined;
   ClaimQr: undefined;
 
@@ -65,8 +66,8 @@ function Router() {
     return (
       <Stack.Navigator>
         <Stack.Screen
-          name="AdminHome"
-          component={AdminHomeScreen}
+          name="LocksHome"
+          component={LocksHomeScreen}
           options={{ title: 'My Locks' }}
         />
         <Stack.Screen
