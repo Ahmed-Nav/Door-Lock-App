@@ -22,10 +22,10 @@ export default function AdminHomeScreen() {
       <View style={s.grid}>
         {/* Manage Locks */}
         <TouchableOpacity
-          style={[s.card, { backgroundColor: '#3B82F6' }]}
+          style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('LocksHome')}
         >
-          <Text style={s.icon}>🔐</Text>
+          
           <Text style={s.cardTitle}>Manage Locks</Text>
           <Text style={s.desc}>View, rename, and manage lock access</Text>
         </TouchableOpacity>
@@ -35,7 +35,7 @@ export default function AdminHomeScreen() {
           style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('UserManagement')}
         >
-          <Text style={s.icon}>👥</Text>
+          
           <Text style={s.cardTitle}>Manage Users</Text>
           <Text style={s.desc}>View users and assign admin roles</Text>
         </TouchableOpacity>
