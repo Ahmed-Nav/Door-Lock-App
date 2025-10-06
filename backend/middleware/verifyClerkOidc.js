@@ -8,10 +8,10 @@ if (!ISSUER) {
   );
 }
 
-// JWKS from Clerk
+
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`));
 
-// Map client_id/azp → role
+
 const ADMIN_CLIENT_ID = process.env.CLERK_ADMIN_CLIENT_ID || "";
 const USER_CLIENT_ID = process.env.CLERK_USER_CLIENT_ID || "";
 
@@ -24,7 +24,7 @@ module.exports = async function verifyClerkOidc(req, res, next) {
 
     const { payload } = await jwtVerify(token, JWKS, { issuer: ISSUER });
 
-    // client identifier (Clerk puts it in azp; fallbacks for safety)
+    
     const clientId =
       payload.azp ||
       (Array.isArray(payload.aud) ? payload.aud[0] : payload.aud) ||

@@ -37,7 +37,9 @@ export default function LocksHomeScreen() {
       });
       Alert.alert(
         'Error loading locks',
-        String(e?.response?.data?.err || e?.message || e)
+        String(
+          e?.response?.data?.err || e?.response?.data?.error || e?.message || e,
+        ),
       );
       setLocks([]);
     } finally {
@@ -45,7 +47,7 @@ export default function LocksHomeScreen() {
     }
   }, [token, role]);
 
-  // Refresh when screen comes into focus
+  
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const goClaim = () => nav.navigate('ClaimLock');
@@ -89,12 +91,12 @@ export default function LocksHomeScreen() {
         />
       )}
 
-      {/* Floating + button */}
+      
       <TouchableOpacity style={s.fab} onPress={goClaim}>
         <Text style={s.fabTxt}>＋</Text>
       </TouchableOpacity>
 
-      {/* Bottom Sign Out */}
+      
       <TouchableOpacity style={s.signOut} onPress={signOut}>
         <Text style={s.signOutTxt}>Sign Out</Text>
       </TouchableOpacity>

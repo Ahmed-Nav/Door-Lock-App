@@ -7,13 +7,13 @@ const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
 const Lock = require("../models/Lock");
 
-// GET /api/locks  → list locks owned by the current admin
+
 router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
   try {
     await connectDB();
 
-    // Adjust to whatever your auth middleware exposes:
-    const ownerId = req.user?.id || req.user?.sub || req.auth?.userId;
+    
+    const ownerId = req.userId;
     if (!ownerId)
       return res.status(401).json({ ok: false, err: "unauthorized" });
 
@@ -32,7 +32,7 @@ router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/locks/:lockId  → rename lock
+
 router.patch(
   "/locks/:lockId",
   verifyClerkOidc,
@@ -42,7 +42,7 @@ router.patch(
       await connectDB();
       const lockId = Number(req.params.lockId || 0);
       const name = (req.body?.name || "").trim();
-      const ownerId = req.user?.id || req.user?.sub || req.auth?.userId;
+      const ownerId = req.userId;
 
       if (!lockId || !name)
         return res.status(400).json({ ok: false, err: "bad-input" });
