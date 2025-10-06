@@ -55,7 +55,14 @@ router.patch(
 
       if (!doc) return res.status(404).json({ ok: false, err: "not-found" });
 
-      return res.json({ ok: true });
+      return res.json({
+        ok: true,
+        lock: {
+          lockId: doc.lockId,
+          name: doc.name || `Lock #${doc.lockId}`,
+          claimed: !!doc.claimed,
+        },
+      });
     } catch (e) {
       console.error("PATCH /api/locks/:lockId failed:", e?.stack || e);
       return res.status(500).json({ ok: false, err: "server-error" });

@@ -20,6 +20,7 @@ import ClaimQrScreen from './components/ClaimQrScreen';
 import RebuildAclScreen from './components/RebuildAclScreen';
 import OwnershipScreen from './components/OwnershipScreen';
 import LocksHomeScreen from './components/LocksHomeScreen';
+import EditLockModal from './components/EditLockModal';
 
 
 export type RootStackParamList = {
@@ -31,6 +32,8 @@ export type RootStackParamList = {
 
 
   LocksHome: undefined;
+
+  EditLock: { lockId: number; name?: string };
   ClaimLock: undefined;
   ClaimQr: undefined;
 
@@ -69,6 +72,11 @@ function Router() {
           name="LocksHome"
           component={LocksHomeScreen}
           options={{ title: 'My Locks' }}
+        />
+        <Stack.Screen
+          name="EditLock"
+          component={EditLockModal}
+          options={{ title: 'Edit Lock' }}
         />
         <Stack.Screen
           name="ClaimLock"

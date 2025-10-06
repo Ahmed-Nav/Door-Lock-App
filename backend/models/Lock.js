@@ -6,6 +6,7 @@ const LockSchema = new mongoose.Schema(
     claimCodeHash: { type: String, required: true },
     claimed: { type: Boolean, default: false },
     ownerAccountId: { type: String, default: null },
+    name: { type: String, default: "" },
   },
   { timestamps: true }
 );
