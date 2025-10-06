@@ -10,13 +10,20 @@ router.get("/me", verifyClerkOidc, async (req, res) => {
     await connectDB();
     const { userId, userEmail, role } = req;
 
+    const existing = await User.findOne({ clerkId: userId });
+
+    let finalRole = "user";
+    if (existing) {
+      finalRole = existing.role;
+    }
+
     const doc = await User.findOneAndUpdate(
       { clerkId: userId },
       {
         $setOnInsert: {
           clerkId: userId,
           email: userEmail,
-          role: role || "user",
+          role: finalRole,
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }

@@ -1,5 +1,7 @@
 // backend/middleware/verifyClerkOidc.js
 const { createRemoteJWKSet, jwtVerify } = require("jose");
+const User = require("../models/User");
+const { connectDB } = require("../services/db");
 
 const ISSUER = process.env.ISSUER;
 if (!ISSUER) {
@@ -31,15 +33,34 @@ module.exports = async function verifyClerkOidc(req, res, next) {
       payload.client_id ||
       null;
 
-    let role = null;
-    if (clientId === ADMIN_CLIENT_ID) role = "admin";
-    else if (clientId === USER_CLIENT_ID) role = "user";
+    let tokenRole = null;
+    if (clientId === ADMIN_CLIENT_ID) tokenRole = "admin";
+    else if (clientId === USER_CLIENT_ID) tokenRole = "user";
     else return res.status(401).json({ error: "unknown-client" });
 
+    await connectDB();
+
+    let dbUser = await User.findOne({ clerkId: payload.sub });
+    if (!dbUser) {
+      
+      dbUser = await User.create({
+        clerkId: payload.sub,
+        email: payload.email || payload["email"],
+        role: "user",
+      });
+    }
+
+    
+    if (tokenRole === "admin" && dbUser.role !== "admin") {
+      return res.status(403).json({ error: "Not authorized as admin" });
+    }
+
+    
     req.userId = payload.sub;
     req.userEmail = payload.email || payload["email"];
-    req.role = role;
+    req.role = dbUser.role; // always trust DB role
     req.clientId = clientId;
+    req.dbUser = dbUser;
 
     next();
   } catch (e) {

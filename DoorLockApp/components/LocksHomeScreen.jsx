@@ -97,9 +97,7 @@ export default function LocksHomeScreen() {
       </TouchableOpacity>
 
       
-      <TouchableOpacity style={s.signOut} onPress={signOut}>
-        <Text style={s.signOutTxt}>Sign Out</Text>
-      </TouchableOpacity>
+
     </View>
   );
 }

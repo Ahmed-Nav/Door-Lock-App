@@ -159,3 +159,13 @@ export async function updateLockName(token, lockId, name) {
   );
   return r.data;
 }
+
+export const listUsers = async token => {
+  const r = await api.get('/users', auth(token));
+  return r.data; 
+};
+
+export const updateUserRole = async (token, userId, role) => {
+  const r = await api.patch(`/users/${userId}/role`, { role }, auth(token));
+  return r.data; 
+};

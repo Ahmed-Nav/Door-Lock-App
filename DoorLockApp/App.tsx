@@ -21,9 +21,12 @@ import RebuildAclScreen from './components/RebuildAclScreen';
 import OwnershipScreen from './components/OwnershipScreen';
 import LocksHomeScreen from './components/LocksHomeScreen';
 import EditLockModal from './components/EditLockModal';
+import UserManagementScreen from './components/UserManagementScreen';
 
 
 export type RootStackParamList = {
+
+  AdminHome: undefined;
   
   RoleSelect: undefined;
 
@@ -32,6 +35,9 @@ export type RootStackParamList = {
 
 
   LocksHome: undefined;
+
+  
+  UserManagement: undefined;
 
   EditLock: { lockId: number; name?: string };
   ClaimLock: undefined;
@@ -69,9 +75,19 @@ function Router() {
     return (
       <Stack.Navigator>
         <Stack.Screen
+          name="AdminHome"
+          component={AdminHomeScreen}
+          options={{ title: 'Admin Dashboard' }}
+        />
+        <Stack.Screen
           name="LocksHome"
           component={LocksHomeScreen}
           options={{ title: 'My Locks' }}
+        />
+        <Stack.Screen
+          name="UserManagement"
+          component={UserManagementScreen}
+          options={{ title: 'Manage Users' }}
         />
         <Stack.Screen
           name="EditLock"

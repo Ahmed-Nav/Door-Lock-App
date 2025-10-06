@@ -13,6 +13,7 @@ const groupRoutes = require("./routes/groupRoutes");
 const keyRoutes = require("./routes/keyRoutes");
 const mfgRoutes = require("./routes/mfgRoutes");
 const lockRoutes = require("./routes/lockRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 
 const app = express();
@@ -30,6 +31,7 @@ app.use("/api", groupRoutes);
 app.use("/api", keyRoutes);
 app.use("/api", mfgRoutes);
 app.use("/api", lockRoutes);
+app.use("/api", userRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log("backend on :" + PORT));
