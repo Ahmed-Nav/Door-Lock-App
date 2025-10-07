@@ -54,9 +54,7 @@ export default function UnlockScreen() {
 
       const resultP = waitAuthResult(device);
       setStatus('Waiting challenge…');
-
       const challenge = await getChallengeOnce(device);
-      console.log('Challenge:', Buffer.from(challenge).toString('hex'));
 
       const { kid } = await getOrCreateDeviceKey();
       const sigB64 = await signChallengeB64(challenge);
@@ -69,18 +67,12 @@ export default function UnlockScreen() {
         throw new Error('Lock rejected: ' + (res?.err || 'unknown'));
 
       setStatus('UNLOCKED (20s)');
-      Alert.alert('OK', 'Unlocked successfully for 20 seconds.');
+      Alert.alert('Success', 'Lock unlocked for 20 seconds.');
     } catch (e) {
       console.log('Unlock error:', e);
-      setStatus('Error');
       Alert.alert('Error', String(e?.message || e));
     } finally {
-      try {
-        if (device) await safeDisconnect(device);
-      } catch (e) {
-        console.warn('Disconnect error:', e);
-      }
-      if (!alive.current) return;
+      await safeEnd(device);
       setStatus('Idle');
     }
   };

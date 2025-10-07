@@ -136,7 +136,6 @@ export async function sendOwnershipSet(
 }
 
 export async function sendAcl(device, envelope) {
-  // ---- 1) Local validation ----
   const sigLen = Buffer.from(String(envelope?.sig || ''), 'base64').length;
   if (sigLen !== 64)
     throw new Error('ACL envelope sig must be 64 bytes (base64 r||s)');
@@ -144,40 +143,34 @@ export async function sendAcl(device, envelope) {
   const users = envelope?.payload?.users || [];
   for (const u of users) {
     const pub = Buffer.from(String(u?.pub || ''), 'base64');
-    if (pub.length !== 65 || pub[0] !== 0x04) {
-      throw new Error(
-        `User "${u?.kid || '?'}" pub must be 65 bytes uncompressed (0x04...)`,
-      );
-    }
+    if (pub.length !== 65 || pub[0] !== 0x04)
+      throw new Error(`User "${u?.kid || '?'}" pub must be 65 B uncompressed`);
   }
 
-  // ---- 2) Prepare base64 of full JSON ----
   const json = JSON.stringify(envelope);
   let value = Buffer.from(json, 'utf8').toString('base64');
-  value = value.replace(/[^A-Za-z0-9+/=]/g, ''); // safety
+  value = value.replace(/[^A-Za-z0-9+/=]/g, '');
 
-  console.log(`Sending ACL: total base64 length = ${value.length}`);
-
-  // ---- 3) Waiter for response ----
+  console.log(`ACL total length = ${value.length}`);
   const waiter = waitForCfgResult(device);
   await sleep(150);
 
-  // ---- 4) Write in BLE chunks ----
-  const CHUNK_SIZE = 180; // safe for MTU~200
-  for (let i = 0; i < value.length; i += CHUNK_SIZE) {
-    const chunk = value.slice(i, i + CHUNK_SIZE);
+  // send in small chunks
+  const CHUNK = 180;
+  for (let i = 0; i < value.length; i += CHUNK) {
+    const chunk = value.slice(i, i + CHUNK);
     await device.writeCharacteristicWithResponseForService(
       UUIDS.CFG_SERVICE,
       UUIDS.CFG_ACL,
       chunk,
     );
-    await sleep(20); // allow firmware to catch up
+    await sleep(20);
   }
 
-  console.log('ACL chunks sent successfully, waiting for result...');
-  const res = await waiter; // { ok:true } or { ok:false, err:... }
+  console.log('All chunks sent; waiting for ESP32 ack…');
+  const res = await waiter;
   if (!res?.ok) throw new Error('ACL failed: ' + (res?.err || 'unknown'));
-  console.log('ACL push complete:', res);
+  console.log('ACL OK:', res);
   return res;
 }
 

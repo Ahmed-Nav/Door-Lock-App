@@ -82,33 +82,15 @@ export default function PushAclScreen() {
   const push = async () => {
     let device;
     try {
-      if (role !== 'admin') {
-        Alert.alert('Forbidden', 'Only Admins can push ACLs.');
-        return;
-      }
-      if (!text.trim()) {
-        Alert.alert('No ACL', 'There is no ACL to send.');
-        return;
-      }
+      if (role !== 'admin')
+        return Alert.alert('Forbidden', 'Only admins allowed.');
+      if (!text.trim())
+        return Alert.alert('No ACL', 'There is no ACL to send.');
 
       const envelope = JSON.parse(text);
       const payloadLockId = Number(envelope?.payload?.lockId);
-      if (payloadLockId !== Number(lockId)) {
-        Alert.alert(
-          'Invalid ACL',
-          `payload.lockId (${payloadLockId}) !== input (${lockId})`,
-        );
-        return;
-      }
-
-      console.log(
-        'sig bytes:',
-        Buffer.from(String(envelope?.sig || ''), 'base64').length,
-      );
-      for (const u of envelope?.payload?.users || []) {
-        const pb = Buffer.from(String(u?.pub || ''), 'base64');
-        console.log(`kid ${u?.kid}: pub bytes=${pb.length} first=${pb[0]}`);
-      }
+      if (payloadLockId !== Number(lockId))
+        return Alert.alert('Invalid ACL', 'Lock ID mismatch.');
 
       setStatus('Scanning…');
       await ensurePermissions();
@@ -118,17 +100,13 @@ export default function PushAclScreen() {
       await sendAcl(device, envelope);
 
       setStatus('ACL Sent');
-      Alert.alert('Success', 'ACL sent to the lock successfully.');
-    } catch (error) {
-      console.log(error);
+      Alert.alert('Success', 'ACL sent successfully.');
+    } catch (err) {
+      console.log(err);
       setStatus('ACL Failed');
-      Alert.alert('ACL Failed', String(error?.message || error));
+      Alert.alert('Error', String(err?.message || err));
     } finally {
-      try {
-        if (device) await device.cancelConnection();
-      } catch (e) {
-        console.warn('Disconnect error:', e);
-      }
+      await safeEnd(device);
       setStatus('Idle');
     }
   };
