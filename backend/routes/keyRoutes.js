@@ -29,6 +29,12 @@ router.post("/keys/register", verifyClerkOidc, async (req, res) => {
         .json({ ok: false, err: "kid-owned-by-other-user" });
     }
 
+    await UserKey.updateMany(
+      { userId: req.userId },
+      { $set: { active: false } }
+    );
+
+    // Then insert or update the new key
     const doc = await UserKey.findOneAndUpdate(
       { kid },
       {
@@ -40,6 +46,7 @@ router.post("/keys/register", verifyClerkOidc, async (req, res) => {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+
     res.json({ ok: true, kid: doc.kid });
   } catch (e) {
     console.error("keys/register error:", {

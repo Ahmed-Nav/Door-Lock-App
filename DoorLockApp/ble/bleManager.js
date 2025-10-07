@@ -136,31 +136,40 @@ export async function sendOwnershipSet(
 }
 
 export async function sendAcl(device, envelope) {
-  // local sanity checks
-  const sigLen = Buffer.from(String(envelope?.sig || ''), 'base64').length;
-  if (sigLen !== 64) throw new Error('ACL sig must be 64 bytes');
-
   const json = JSON.stringify(envelope);
+  const b64len = Buffer.byteLength(json, 'utf8');
+
   const waiter = waitForCfgResult(device);
   await sleep(150);
 
-  // chunk raw JSON directly (not base64)
+  // 1️⃣ send start control
+  const header = `{len:${b64len}}`;
+  await device.writeCharacteristicWithResponseForService(
+    UUIDS.CFG_SERVICE,
+    UUIDS.CFG_ACL,
+    Buffer.from(header, 'utf8').toString('base64'),
+  );
+  await sleep(50);
+
+  // 2️⃣ send chunks
   const CHUNK = 180;
   for (let i = 0; i < json.length; i += CHUNK) {
     const chunk = json.slice(i, i + CHUNK);
     await device.writeCharacteristicWithResponseForService(
       UUIDS.CFG_SERVICE,
       UUIDS.CFG_ACL,
-      Buffer.from(chunk, 'utf8').toString('base64'), // each chunk must be base64-encoded separately
+      Buffer.from(chunk, 'utf8').toString('base64'),
     );
-    await sleep(20);
+    await sleep(60); // allow ACK time
   }
 
+  // 3️⃣ wait for completion notify
   const res = await waiter;
   if (!res?.ok) throw new Error('ACL failed: ' + (res?.err || 'unknown'));
   console.log('ACL OK', res);
   return res;
 }
+
 
 
 // -------------------- Phase III helpers --------------------
