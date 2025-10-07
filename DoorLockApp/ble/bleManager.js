@@ -136,41 +136,29 @@ export async function sendOwnershipSet(
 }
 
 export async function sendAcl(device, envelope) {
+  // local sanity checks
   const sigLen = Buffer.from(String(envelope?.sig || ''), 'base64').length;
-  if (sigLen !== 64)
-    throw new Error('ACL envelope sig must be 64 bytes (base64 r||s)');
-
-  const users = envelope?.payload?.users || [];
-  for (const u of users) {
-    const pub = Buffer.from(String(u?.pub || ''), 'base64');
-    if (pub.length !== 65 || pub[0] !== 0x04)
-      throw new Error(`User "${u?.kid || '?'}" pub must be 65 B uncompressed`);
-  }
+  if (sigLen !== 64) throw new Error('ACL sig must be 64 bytes');
 
   const json = JSON.stringify(envelope);
-  let value = Buffer.from(json, 'utf8').toString('base64');
-  value = value.replace(/[^A-Za-z0-9+/=]/g, '');
-
-  console.log(`ACL total length = ${value.length}`);
   const waiter = waitForCfgResult(device);
   await sleep(150);
 
-  // send in small chunks
+  // chunk raw JSON directly (not base64)
   const CHUNK = 180;
-  for (let i = 0; i < value.length; i += CHUNK) {
-    const chunk = value.slice(i, i + CHUNK);
+  for (let i = 0; i < json.length; i += CHUNK) {
+    const chunk = json.slice(i, i + CHUNK);
     await device.writeCharacteristicWithResponseForService(
       UUIDS.CFG_SERVICE,
       UUIDS.CFG_ACL,
-      chunk,
+      Buffer.from(chunk, 'utf8').toString('base64'), // each chunk must be base64-encoded separately
     );
     await sleep(20);
   }
 
-  console.log('All chunks sent; waiting for ESP32 ack…');
   const res = await waiter;
   if (!res?.ok) throw new Error('ACL failed: ' + (res?.err || 'unknown'));
-  console.log('ACL OK:', res);
+  console.log('ACL OK', res);
   return res;
 }
 
