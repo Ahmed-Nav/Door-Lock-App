@@ -80,6 +80,7 @@ export default function PushAclScreen() {
   }, [ctxLockId, token, preEnvelope]);
 
   const push = async () => {
+    let device;
     try {
       if (role !== 'admin') {
         Alert.alert('Forbidden', 'Only Admins can push ACLs.');
@@ -100,7 +101,6 @@ export default function PushAclScreen() {
         return;
       }
 
-      
       console.log(
         'sig bytes:',
         Buffer.from(String(envelope?.sig || ''), 'base64').length,
@@ -112,20 +112,27 @@ export default function PushAclScreen() {
 
       setStatus('Scanning…');
       await ensurePermissions();
-      const device = await scanAndConnectForLockId(Number(lockId));
+      device = await scanAndConnectForLockId(Number(lockId));
 
       setStatus('Sending ACL…');
       await sendAcl(device, envelope);
-      await device.cancelConnection();
 
       setStatus('ACL Sent');
-      Alert.alert('Done', 'ACL sent to the lock.');
+      Alert.alert('Success', 'ACL sent to the lock successfully.');
     } catch (error) {
       console.log(error);
       setStatus('ACL Failed');
       Alert.alert('ACL Failed', String(error?.message || error));
+    } finally {
+      try {
+        if (device) await device.cancelConnection();
+      } catch (e) {
+        console.warn('Disconnect error:', e);
+      }
+      setStatus('Idle');
     }
   };
+
 
   return (
     <View style={s.c}>

@@ -136,7 +136,7 @@ export async function sendOwnershipSet(
 }
 
 export async function sendAcl(device, envelope) {
-  // 1) Preflight on the phone (cheap, instant feedback)
+  // ---- 1) Local validation ----
   const sigLen = Buffer.from(String(envelope?.sig || ''), 'base64').length;
   if (sigLen !== 64)
     throw new Error('ACL envelope sig must be 64 bytes (base64 r||s)');
@@ -151,23 +151,33 @@ export async function sendAcl(device, envelope) {
     }
   }
 
-  // 2) Prepare the base64 of the WHOLE JSON envelope
+  // ---- 2) Prepare base64 of full JSON ----
   const json = JSON.stringify(envelope);
   let value = Buffer.from(json, 'utf8').toString('base64');
+  value = value.replace(/[^A-Za-z0-9+/=]/g, ''); // safety
 
-  // 3) Belt & suspenders: remove any non-base64 chars (e.g. CR/LF/spaces)
-  value = value.replace(/[^A-Za-z0-9+/=]/g, '');
+  console.log(`Sending ACL: total base64 length = ${value.length}`);
 
+  // ---- 3) Waiter for response ----
   const waiter = waitForCfgResult(device);
-  await sleep(150); // ensure CCCD for CFG_RESULT is armed
-  await device.writeCharacteristicWithResponseForService(
-    UUIDS.CFG_SERVICE,
-    UUIDS.CFG_ACL,
-    value,
-  );
+  await sleep(150);
 
+  // ---- 4) Write in BLE chunks ----
+  const CHUNK_SIZE = 180; // safe for MTU~200
+  for (let i = 0; i < value.length; i += CHUNK_SIZE) {
+    const chunk = value.slice(i, i + CHUNK_SIZE);
+    await device.writeCharacteristicWithResponseForService(
+      UUIDS.CFG_SERVICE,
+      UUIDS.CFG_ACL,
+      chunk,
+    );
+    await sleep(20); // allow firmware to catch up
+  }
+
+  console.log('ACL chunks sent successfully, waiting for result...');
   const res = await waiter; // { ok:true } or { ok:false, err:... }
   if (!res?.ok) throw new Error('ACL failed: ' + (res?.err || 'unknown'));
+  console.log('ACL push complete:', res);
   return res;
 }
 

@@ -1,8 +1,15 @@
 // DoorLockApp/components/GroupDetail.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, FlatList, Alert, StyleSheet, TextInput,
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  Alert,
+  StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
+import DropDownPicker from 'react-native-dropdown-picker';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -12,6 +19,8 @@ import {
   removeUserFromGroup,
   unassignLockFromGroup,
   deleteGroup,
+  listUsers,
+  listLocks,
 } from '../services/apiService';
 
 export default function GroupDetail() {
@@ -22,10 +31,18 @@ export default function GroupDetail() {
 
   const [g, setG] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState('');
-  const [lockId, setLockId] = useState('');
 
-  async function load() {
+
+  const [userOpen, setUserOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [userOptions, setUserOptions] = useState<{ label: string; value: string }[]>([]);
+
+  const [lockOpen, setLockOpen] = useState(false);
+  const [selectedLock, setSelectedLock] = useState<number | null>(null);
+  const [lockOptions, setLockOptions] = useState<{ label: string; value: number }[]>([]);
+
+  
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const d = await getGroup(token, groupId);
@@ -33,16 +50,63 @@ export default function GroupDetail() {
     } finally {
       setLoading(false);
     }
+  }, [token, groupId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  
+  const loadDropdowns = useCallback(async () => {
+  try {
+    const [usersRes, locksRes] = await Promise.all([
+      listUsers(token),
+      listLocks(token),
+    ]);
+
+    const groupUsers = g?.users?.map((u: any) => u.email) || [];
+    const groupLocks = g?.lockIds || [];
+
+    // Extract arrays safely regardless of backend shape
+    const usersArray = Array.isArray(usersRes)
+      ? usersRes
+      : usersRes?.users || [];
+    const locksArray = Array.isArray(locksRes)
+      ? locksRes
+      : locksRes?.locks || [];
+
+    // Log once for confirmation
+    console.log('Dropdown → users:', usersArray);
+    console.log('Dropdown → locks:', locksArray);
+
+    const filteredUsers = usersArray
+      .filter((u: any) => !groupUsers.includes(u.email))
+      .map((u: any) => ({ label: u.email, value: u.email }));
+
+    const filteredLocks = locksArray
+  .filter((l: any) => !groupLocks.includes(l.lockId))
+  .map((l: any) => ({
+    label: `Lock #${l.lockId}${l.name ? ` (${l.name})` : ''}`,
+    value: l.lockId,
+  }));
+
+    setUserOptions(filteredUsers);
+    setLockOptions(filteredLocks);
+  } catch (e) {
+    console.warn('Dropdown load failed', e);
   }
+}, [token, g]);
 
-  useEffect(() => { load(); }, [groupId]);
+  useEffect(() => {
+    if (g) loadDropdowns();
+  }, [g, loadDropdowns]);
 
-  // ---- add / assign (moved here) ----
+  
   const doAddUser = async () => {
-    if (!email.trim()) return;
+    if (!selectedUser) return Alert.alert('Select a user first');
     try {
-      await addUserToGroup(token, groupId, email.trim());
-      setEmail('');
+      await addUserToGroup(token, groupId, selectedUser);
+      setSelectedUser(null);
       await load();
     } catch (e) {
       Alert.alert('Add user failed', String(e?.response?.data?.err || e?.message || e));
@@ -50,17 +114,16 @@ export default function GroupDetail() {
   };
 
   const doAssignLock = async () => {
-    if (!lockId.trim()) return;
+    if (!selectedLock) return Alert.alert('Select a lock first');
     try {
-      await assignLockToGroup(token, groupId, Number(lockId));
-      setLockId('');
+      await assignLockToGroup(token, groupId, selectedLock);
+      setSelectedLock(null);
       await load();
     } catch (e) {
       Alert.alert('Assign lock failed', String(e?.response?.data?.err || e?.message || e));
     }
   };
 
-  // ---- existing remove / unassign / delete ----
   const doRemoveUser = async (userEmail: string) => {
     try {
       await removeUserFromGroup(token, groupId, userEmail);
@@ -99,8 +162,9 @@ export default function GroupDetail() {
 
   if (loading || !g) {
     return (
-      <View style={s.c}>
-        <Text style={s.t}>Loading…</Text>
+      <View style={s.center}>
+        <ActivityIndicator color="#7B1FA2" />
+        <Text style={s.loadingText}>Loading…</Text>
       </View>
     );
   }
@@ -109,34 +173,45 @@ export default function GroupDetail() {
     <View style={s.c}>
       <Text style={s.h}>Group: {g.name}</Text>
 
-      {/* Add user / assign lock */}
-      <View style={s.row}>
-        <TextInput
-          style={[s.in, { flex: 1 }]}
-          placeholder="user email"
-          placeholderTextColor="#888"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doAddUser}>
-          <Text style={s.btnText}>Add user</Text>
-        </TouchableOpacity>
-      </View>
+      
+      <Text style={s.sub}>Add User</Text>
+      <DropDownPicker
+        open={userOpen}
+        value={selectedUser}
+        items={userOptions}
+        setOpen={setUserOpen}
+        setValue={setSelectedUser}
+        setItems={setUserOptions}
+        placeholder="Select user"
+        style={s.dropdown}
+        textStyle={{ color: 'white' }}
+        dropDownContainerStyle={s.dropdownContainer}
+        placeholderStyle={{ color: '#888' }}
+      />
+      <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doAddUser}>
+        <Text style={s.btnText}>Add user</Text>
+      </TouchableOpacity>
 
-      <View style={s.row}>
-        <TextInput
-          style={[s.in, { flex: 1 }]}
-          placeholder="lock id"
-          placeholderTextColor="#888"
-          keyboardType="numeric"
-          value={lockId}
-          onChangeText={setLockId}
-        />
-        <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doAssignLock}>
-          <Text style={s.btnText}>Assign lock</Text>
-        </TouchableOpacity>
-      </View>
+      
+      <Text style={[s.sub, { marginTop: 12 }]}>Assign Lock</Text>
+      <DropDownPicker
+        open={lockOpen}
+        value={selectedLock}
+        items={lockOptions}
+        setOpen={setLockOpen}
+        setValue={setSelectedLock}
+        setItems={setLockOptions}
+        placeholder="Select lock"
+        style={s.dropdown}
+        textStyle={{ color: 'white' }}
+        dropDownContainerStyle={s.dropdownContainer}
+        placeholderStyle={{ color: '#888' }}
+      />
+      <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doAssignLock}>
+        <Text style={s.btnText}>Assign lock</Text>
+      </TouchableOpacity>
 
+     
       <Text style={s.t2}>Users</Text>
       <FlatList
         data={g.users}
@@ -155,6 +230,7 @@ export default function GroupDetail() {
         ListEmptyComponent={<Text style={s.empty}>No users</Text>}
       />
 
+      
       <Text style={[s.t2, { marginTop: 12 }]}>Locks</Text>
       <FlatList
         data={g.lockIds}
@@ -182,12 +258,21 @@ export default function GroupDetail() {
 
 const s = StyleSheet.create({
   c: { flex: 1, backgroundColor: '#0b0b0f', padding: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0b0b0f' },
+  loadingText: { color: '#bbb', marginTop: 8 },
   h: { color: 'white', fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  t: { color: 'white' },
-  t2: { color: '#ddd', fontWeight: '700', marginTop: 12, marginBottom: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  in: { backgroundColor: '#1d1d25', color: 'white', borderRadius: 10, padding: 12 },
-  btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
+  sub: { color: '#ddd', fontWeight: '700', marginTop: 8, marginBottom: 4 },
+  t2: { color: '#ddd', fontWeight: '700', marginTop: 16, marginBottom: 6 },
+  dropdown: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
+    marginBottom: 8,
+  },
+  dropdownContainer: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
+  },
+  btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, marginBottom: 6 },
   btnText: { color: 'white', fontWeight: '700' },
   rowItem: {
     backgroundColor: '#1d1d25',

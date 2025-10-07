@@ -1,5 +1,4 @@
-// components/UnlockScreen.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,13 +18,17 @@ import {
 import { signChallengeB64, getOrCreateDeviceKey } from '../lib/keys';
 import { Buffer } from 'buffer';
 
-
 const LOCK_ID = 101;
-
-
 
 export default function UnlockScreen() {
   const [status, setStatus] = useState('Idle');
+  const alive = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -49,39 +52,36 @@ export default function UnlockScreen() {
       await ensurePerms();
       device = await scanAndConnectForLockId(LOCK_ID);
 
-      
       const resultP = waitAuthResult(device);
-
-      
       setStatus('Waiting challenge…');
+
       const challenge = await getChallengeOnce(device);
-      console.log(
-        'challenge len=',
-        challenge.length,
-        ' hex=',
-        Buffer.from(challenge).toString('hex'),
-      );
+      console.log('Challenge:', Buffer.from(challenge).toString('hex'));
 
       const { kid } = await getOrCreateDeviceKey();
-      
       const sigB64 = await signChallengeB64(challenge);
 
-      
       setStatus('Sending response…');
       await sendAuthResponse(device, kid, sigB64);
 
-      const res = await resultP; 
+      const res = await resultP;
       if (!res?.ok)
         throw new Error('Lock rejected: ' + (res?.err || 'unknown'));
 
       setStatus('UNLOCKED (20s)');
-      Alert.alert('OK', 'Unlocked (20s). Watch Serial for [AUTH_OK].');
+      Alert.alert('OK', 'Unlocked successfully for 20 seconds.');
     } catch (e) {
       console.log('Unlock error:', e);
       setStatus('Error');
       Alert.alert('Error', String(e?.message || e));
     } finally {
-      if (device) await safeDisconnect(device);
+      try {
+        if (device) await safeDisconnect(device);
+      } catch (e) {
+        console.warn('Disconnect error:', e);
+      }
+      if (!alive.current) return;
+      setStatus('Idle');
     }
   };
 
