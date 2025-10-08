@@ -13,28 +13,13 @@ import {
 import { Buffer } from 'buffer';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import {
-  scanAndConnectForLockId,
-  sendAcl,
-  safeDisconnect,
-} from '../ble/bleManager';
+import { scanAndConnectForLockId, sendAcl } from '../ble/bleManager';
 import { fetchLatestAcl } from '../services/apiService';
-
-
-async function safeEnd(device) {
-  if (!device) return;
-  try {
-    await safeDisconnect(device);
-  } catch (e) {
-    console.log('safeEnd error', e);
-  }
-}
 
 export default function PushAclScreen() {
   const { token, role } = useAuth();
   const route = useRoute();
 
-  
   const ctxLockId = route.params?.lockId ? String(route.params.lockId) : '101';
   const preEnvelope = route.params?.envelope || null;
 
@@ -59,7 +44,6 @@ export default function PushAclScreen() {
     }
   }
 
-  
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -94,37 +78,51 @@ export default function PushAclScreen() {
   }, [ctxLockId, token, preEnvelope]);
 
   const push = async () => {
-    let device;
     try {
-      if (role !== 'admin')
-        return Alert.alert('Forbidden', 'Only admins allowed.');
-      if (!text.trim())
-        return Alert.alert('No ACL', 'There is no ACL to send.');
+      if (role !== 'admin') {
+        Alert.alert('Forbidden', 'Only Admins can push ACLs.');
+        return;
+      }
+      if (!text.trim()) {
+        Alert.alert('No ACL', 'There is no ACL to send.');
+        return;
+      }
 
       const envelope = JSON.parse(text);
       const payloadLockId = Number(envelope?.payload?.lockId);
-      if (payloadLockId !== Number(lockId))
-        return Alert.alert('Invalid ACL', 'Lock ID mismatch.');
+      if (payloadLockId !== Number(lockId)) {
+        Alert.alert(
+          'Invalid ACL',
+          `payload.lockId (${payloadLockId}) !== input (${lockId})`,
+        );
+        return;
+      }
+
+      console.log(
+        'sig bytes:',
+        Buffer.from(String(envelope?.sig || ''), 'base64').length,
+      );
+      for (const u of envelope?.payload?.users || []) {
+        const pb = Buffer.from(String(u?.pub || ''), 'base64');
+        console.log(`kid ${u?.kid}: pub bytes=${pb.length} first=${pb[0]}`);
+      }
 
       setStatus('Scanning…');
       await ensurePermissions();
-      device = await scanAndConnectForLockId(Number(lockId));
+      const device = await scanAndConnectForLockId(Number(lockId));
 
       setStatus('Sending ACL…');
       await sendAcl(device, envelope);
 
       setStatus('ACL Sent');
-      Alert.alert('Success', 'ACL sent successfully.');
-    } catch (err) {
-      console.log(err);
+      Alert.alert('Done', 'ACL sent to the lock.');
+      await device.cancelConnection();
+    } catch (error) {
+      console.log(error);
       setStatus('ACL Failed');
-      Alert.alert('Error', String(err?.message || err));
-    } finally {
-      await safeEnd(device);
-      setStatus('Idle');
+      Alert.alert('ACL Failed', String(error?.message || error));
     }
   };
-
 
   return (
     <View style={s.c}>

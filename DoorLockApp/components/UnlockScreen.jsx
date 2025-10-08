@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+// components/UnlockScreen.jsx
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -19,27 +20,12 @@ import { signChallengeB64, getOrCreateDeviceKey } from '../lib/keys';
 import { Buffer } from 'buffer';
 
 
-async function safeEnd(device) {
-  if (!device) return;
-  try {
-    await safeDisconnect(device);
-  } catch (e) {
-    console.log('safeEnd error', e);
-  }
-}
-
-
 const LOCK_ID = 101;
+
+
 
 export default function UnlockScreen() {
   const [status, setStatus] = useState('Idle');
-  const alive = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      alive.current = false;
-    };
-  }, []);
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -63,28 +49,41 @@ export default function UnlockScreen() {
       await ensurePerms();
       device = await scanAndConnectForLockId(LOCK_ID);
 
+      
       const resultP = waitAuthResult(device);
+
+      
       setStatus('Waiting challenge…');
       const challenge = await getChallengeOnce(device);
+      console.log(
+        'challenge len=',
+        challenge.length,
+        ' hex=',
+        Buffer.from(challenge).toString('hex'),
+      );
 
       const { kid } = await getOrCreateDeviceKey();
+      
       const sigB64 = await signChallengeB64(challenge);
 
+      
       setStatus('Sending response…');
       await sendAuthResponse(device, kid, sigB64);
 
-      const res = await resultP;
+      const res = await resultP; 
       if (!res?.ok)
         throw new Error('Lock rejected: ' + (res?.err || 'unknown'));
 
+      
       setStatus('UNLOCKED (20s)');
-      Alert.alert('Success', 'Lock unlocked for 20 seconds.');
+      Alert.alert('OK', 'Unlocked (20s).');
+      await safeDisconnect(device);
     } catch (e) {
       console.log('Unlock error:', e);
+      setStatus('Error');
       Alert.alert('Error', String(e?.message || e));
     } finally {
-      await safeEnd(device);
-      setStatus('Idle');
+      if (device) await safeDisconnect(device);
     }
   };
 
