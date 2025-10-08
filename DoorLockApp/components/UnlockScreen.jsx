@@ -17,7 +17,7 @@ import {
 } from '../ble/bleManager';
 import { signChallengeB64, getOrCreateDeviceKey } from '../lib/keys';
 import { Buffer } from 'buffer';
-import { safeDisconnect } from '../ble/bleManager';
+
 
 async function safeEnd(device) {
   if (!device) return;

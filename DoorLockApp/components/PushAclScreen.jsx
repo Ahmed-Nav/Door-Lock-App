@@ -13,9 +13,13 @@ import {
 import { Buffer } from 'buffer';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { scanAndConnectForLockId, sendAcl } from '../ble/bleManager';
+import {
+  scanAndConnectForLockId,
+  sendAcl,
+  safeDisconnect,
+} from '../ble/bleManager';
 import { fetchLatestAcl } from '../services/apiService';
-import { safeDisconnect } from '../ble/bleManager';
+
 
 async function safeEnd(device) {
   if (!device) return;
