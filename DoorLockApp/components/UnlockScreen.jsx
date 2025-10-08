@@ -17,6 +17,17 @@ import {
 } from '../ble/bleManager';
 import { signChallengeB64, getOrCreateDeviceKey } from '../lib/keys';
 import { Buffer } from 'buffer';
+import { safeDisconnect } from '../ble/bleManager';
+
+async function safeEnd(device) {
+  if (!device) return;
+  try {
+    await safeDisconnect(device);
+  } catch (e) {
+    console.log('safeEnd error', e);
+  }
+}
+
 
 const LOCK_ID = 101;
 
