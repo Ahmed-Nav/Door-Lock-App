@@ -8,6 +8,17 @@ export const api = axios.create({
   timeout: 10000,
 });
 
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const status = err?.response?.status;
+    if (status === 401) {
+      
+    }
+    return Promise.reject(err);
+  }
+);
+
 
 export const auth = token => ({
   headers: { Authorization: `Bearer ${token}` },

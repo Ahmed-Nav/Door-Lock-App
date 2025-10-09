@@ -6,7 +6,7 @@ const { connectDB } = require("../services/db");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
 const Lock = require("../models/Lock");
-
+const { parseLockId, requireString } = require("../middleware/validate");
 
 router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
   try {
@@ -37,11 +37,11 @@ router.patch(
   "/locks/:lockId",
   verifyClerkOidc,
   requireAdmin,
-  async (req, res) => {
+  async (req, res, next) => {
     try {
       await connectDB();
-      const lockId = Number(req.params.lockId || 0);
-      const name = (req.body?.name || "").trim();
+      const lockId = parseLockId(req.params.lockId);
+      const name = requireString(req.body?.name, "name", { min: 1, max: 80 });
       const ownerId = req.userId;
 
       if (!lockId || !name)
@@ -53,7 +53,12 @@ router.patch(
         { new: true }
       ).lean();
 
-      if (!doc) return res.status(404).json({ ok: false, err: "not-found" });
+      if (!doc) {
+        const e = new Error("not-found");
+        e.code = "NOT_FOUND";
+        e.status = 404;
+        throw e;
+      }
 
       return res.json({
         ok: true,
@@ -67,6 +72,7 @@ router.patch(
       console.error("PATCH /api/locks/:lockId failed:", e?.stack || e);
       return res.status(500).json({ ok: false, err: "server-error" });
     }
+    next(e);
   }
 );
 

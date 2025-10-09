@@ -2,11 +2,15 @@
 const express = require("express");
 const crypto = require("crypto");
 const { connectDB } = require("../services/db");
+const rateLimit = require("express-rate-limit");
+
+const limiter = rateLimit({ windowMs: 60_000, max: 120 });
 const Lock = require("../models/Lock");
 const Group = require("../models/Group");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
 const { getOrCreateLockKey } = require("../services/keyService");
+const { parseLockId, requireString, bad } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -19,29 +23,38 @@ router.post(
   "/locks/:lockId/claim",
   verifyClerkOidc,
   requireAdmin,
-  async (req, res) => {
-    const lockId = Number(req.params.lockId);
-    const claimCode = String(req.body?.claimCode ?? "");
+  async (req, res, next) => {
     try {
       await connectDB();
+      const lockId = parseLockId(req.params.lockId);
+      const claimCode = requireString(req.body?.claimCode ?? "", "claimCode", {
+        min: 3,
+        max: 64,
+      });
       console.log("[CLAIM] start", { lockId, user: req.userEmail });
 
       const lock = await Lock.findOne({ lockId }).lean();
       if (!lock)
-        return res.status(404).json({ ok: false, err: "lock-not-found" });
+        throw Object.assign(new Error("not-found"), {
+          code: "NOT_FOUND",
+          status: 404,
+        });
       if (lock.claimed)
-        return res.status(409).json({ ok: false, err: "already-claimed" });
+        throw Object.assign(new Error("already-claimed"), {
+          code: "CLAIM_CONFLICT",
+          status: 409,
+        });
 
       
-      const wantHex = (lock.claimCodeHash || "").trim().toLowerCase();
-      const gotHex = crypto
-        .createHash("sha256")
-        .update(claimCode, "utf8")
-        .digest("hex")
+      const wantHex = String(lock.claimCodeHash || "")
+        .trim()
         .toLowerCase();
-      const okCode = wantHex === gotHex;
-      if (!okCode) return res.status(403).json({ ok: false, err: "bad-claim" });
-
+      const gotHex = sha256Hex(claimCode).toLowerCase();
+      const a = Buffer.from(wantHex, "utf8");
+      const b = Buffer.from(gotHex, "utf8");
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        throw Object.assign(new Error("bad-claim"), { code: "FORBIDDEN", status: 403 });
+      }
       
       const k = await getOrCreateLockKey(lockId);
       console.log("[CLAIM] key ok");
@@ -58,6 +71,7 @@ router.post(
       console.error("[CLAIM] error", e);
       return res.status(500).json({ ok: false, err: "server-error" });
     }
+    next(e);
   }
 );
 

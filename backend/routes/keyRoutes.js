@@ -1,19 +1,28 @@
 const router = require("express").Router();
 const crypto = require("crypto");
+const rateLimit = require("express-rate-limit");
 const verifyClerkOidc  = require("../middleware/verifyClerkOidc");
+
+const limiter = rateLimit({ windowMs: 60_000, max: 120 });
 const { connectDB } = require("../services/db");
 const UserKey = require("../models/UserKey");
+const { requireString, bad } = require("../middleware/validate");
 
 const kidOf = (pubB64) =>
   crypto.createHash("sha256").update(pubB64, "utf8").digest("hex").slice(0, 16);
 
 
-router.post("/keys/register", verifyClerkOidc, async (req, res) => {
+router.post("/keys/register", limiter, verifyClerkOidc, async (req, res) => {
   try {
 
     await connectDB();
 
-    const { pubB64, label } = req.body || {};
+    const pubB64 = requireString(req.body?.pubB64, "pubB64", {
+      min: 80,
+      max: 200,
+    });
+    const label =
+      typeof req.body?.label === "string" ? req.body.label.slice(0, 64) : "";
     if (!pubB64) return res.status(400).json({ ok: false, err: "missing-pub" });
 
     if (pubB64.length < 80) {
@@ -49,17 +58,8 @@ router.post("/keys/register", verifyClerkOidc, async (req, res) => {
 
     res.json({ ok: true, kid: doc.kid });
   } catch (e) {
-    console.error("keys/register error:", {
-      message: e?.message,
-      code: e?.code,
-      name: e?.name,
-      stack: e?.stack,
-    });
-    
-    if (e?.code === 11000) {
-      return res.status(409).json({ ok: false, err: "duplicate-key" });
-    }
-    return res.status(500).json({ ok: false, err: "server-error" });
+    if (e?.code === 11000) { e.status = 409; e.code = "CLAIM_CONFLICT"; }
+    return next(e);
   }
 });
 
