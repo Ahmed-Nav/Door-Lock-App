@@ -20,6 +20,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "fs-extra": "^11.3.1",
+    "helmet": "^8.1.0",
     "jose": "^6.1.0",
     "mongodb": "^6.18.0",
     "mongoose": "^8.18.0",
