@@ -1,4 +1,4 @@
-// components/OwnershipScreen.jsx
+// DoorLockApp/components/OwnershipScreen.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -14,14 +14,14 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import RNAndroidLocationEnabler from 'react-native-android-location-enabler';
 import { scanAndConnectForLockId, sendOwnershipSet } from '../ble/bleManager';
 import { useAuth } from '../auth/AuthContext';
-import { getAdminPub } from '../services/apiService';
+import { getAdminPub, patchLock } from '../services/apiService';
+import { loadClaimContext, clearClaimContext } from '../lib/keys';
 
 export default function OwnershipScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { token } = useAuth();
 
-  
   const initialLockId = useMemo(
     () => (route?.params?.lockId ? String(route.params.lockId) : '101'),
     [route?.params?.lockId],
@@ -34,24 +34,32 @@ export default function OwnershipScreen() {
 
   const [lockId, setLockId] = useState(initialLockId);
   const [claimCode, setClaimCode] = useState(initialClaimCode);
-  const [adminPubB64, setAdminPubB64] = useState(''); 
+  const [adminPubB64, setAdminPubB64] = useState('');
   const [status, setStatus] = useState('Idle');
   const [busy, setBusy] = useState(false);
 
-  
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!token) return;
+      if (!token || !Number.isFinite(id)) return;
+      const id = Number(initialLockId);
       try {
-        const r = await getAdminPub(token); 
+        const saved = await loadClaimContext(id);
+        if (!cancelled && saved) {
+          setLockId(String(id));
+          setClaimCode(saved.claimCode);
+          setAdminPubB64(saved.adminPubB64);
+          return;
+        }
+        // 2) Fallback to server admin pub if no saved context
+        const r = await getAdminPub(token);
         if (!cancelled && r?.ok && r?.pub) setAdminPubB64(r.pub.trim());
         if (!cancelled && (!r?.ok || !r?.pub)) {
           console.log('admin pub missing from server', r);
         }
       } catch (e) {
         console.log(
-          'getAdminPub failed:',
+          'ownership init failed:',
           e?.response?.data || e?.message || e,
         );
       }
@@ -59,7 +67,7 @@ export default function OwnershipScreen() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, initialLockId]);
 
   async function ensurePermissions() {
     if (Platform.OS !== 'android') return;
@@ -81,9 +89,7 @@ export default function OwnershipScreen() {
         interval: 10000,
         fastInterval: 5000,
       });
-    } catch {
-      
-    }
+    } catch {}
   }
 
   const onSend = async () => {
@@ -105,6 +111,15 @@ export default function OwnershipScreen() {
         adminPubB64: adminPubB64.trim(),
         claimCode: claimCode.trim(),
       });
+      try {
+        await patchLock(token, Number(lockId), { setupComplete: true });
+        await clearClaimContext(Number(lockId));
+      } catch (e) {
+        console.log(
+          'finalize setup failed:',
+          e?.response?.data || e?.message || e,
+        );
+      }
       setStatus('Sent');
       Alert.alert(
         'Ownership OK',
@@ -139,23 +154,23 @@ export default function OwnershipScreen() {
       <TextInput
         style={s.in}
         value={lockId}
-        onChangeText={setLockId}
         placeholder="Lock ID "
         keyboardType="numeric"
+        editable={false}
       />
       <TextInput
         style={s.in}
         value={claimCode}
-        onChangeText={setClaimCode}
         placeholder="Claim Code "
         autoCapitalize="characters"
+        editable={false}
       />
       <TextInput
         style={[s.in, { height: 120, textAlignVertical: 'top' }]}
         multiline
         value={adminPubB64}
-        onChangeText={setAdminPubB64}
         placeholder="Admin key"
+        editable={false}
       />
 
       <TouchableOpacity

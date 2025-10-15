@@ -9,6 +9,8 @@ import { api } from '../services/apiService';
 
 const KC_SERVICE = 'door-lock-device-key-v1';
 
+const CLAIM_SERVICE = 'doorlock-claim-context-v1';
+
 const b64 = u8 => Buffer.from(u8).toString('base64');
 const hexOf = u8 => Buffer.from(u8).toString('hex');
 const kidOf = pubB64 =>
@@ -74,4 +76,33 @@ export async function registerDeviceKeyWithServer(token) {
     });
   }
   return kid;
+}
+
+export async function saveClaimContext(ctx) {
+  const username = String(ctx.lockId);
+  const password = JSON.stringify({ ...ctx, ts: Date.now() });
+  await Keychain.setGenericPassword(username, password, {
+    service: CLAIM_SERVICE,
+    accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+  });
+  return true;
+}
+
+
+export async function loadClaimContext(lockId) {
+  try {
+    const res = await Keychain.getGenericPassword({ service: CLAIM_SERVICE });
+    if (!res) return null;
+    if (res.username !== String(lockId)) return null;
+    return JSON.parse(res.password);
+  } catch {
+    return null;
+  }
+}
+
+
+export async function clearClaimContext(_lockId) {
+  try {
+    await Keychain.resetGenericPassword({ service: CLAIM_SERVICE });
+  } catch {}
 }

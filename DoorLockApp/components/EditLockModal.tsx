@@ -1,8 +1,16 @@
+// DoorLockApp/components/EditLockModal.jsx
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { updateLockName } from '../services/apiService';
+import { updateLockName, deleteLock } from '../services/apiService';
 
 export default function EditLockModal() {
   const nav = useNavigation<any>();
@@ -18,9 +26,40 @@ export default function EditLockModal() {
       await updateLockName(token, lockId, name.trim());
       Alert.alert('Saved', 'Lock name updated.');
       nav.goBack();
-    } catch (e:any) {
+    } catch (e: any) {
       Alert.alert('Failed', String(e?.message || e));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const del = async () => {
+    Alert.alert(
+      'Delete Lock',
+      `Delete lock #${lockId}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setBusy(true);
+              await deleteLock(token, lockId);
+              Alert.alert('Deleted', `Lock #${lockId} removed.`);
+              nav.goBack();
+            } catch (e: any) {
+              Alert.alert(
+                'Delete failed',
+                String(e?.response?.data?.err || e?.message || e),
+              );
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -30,14 +69,31 @@ export default function EditLockModal() {
       <TouchableOpacity onPress={save} disabled={busy} style={s.btn}>
         <Text style={s.bt}>{busy ? 'Saving…' : 'Save'}</Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        onPress={del}
+        disabled={busy}
+        style={[s.btn, { backgroundColor: '#b23b3b' }]}
+      >
+        <Text style={s.bt}>{busy ? '...' : 'Delete Lock'}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  c:{ flex:1, backgroundColor:'#0b0b0f', padding:16, gap:12 },
-  t:{ color:'#fff', fontSize:18, fontWeight:'800' },
-  in:{ backgroundColor:'#1d1d25', color:'#fff', borderRadius:8, padding:12 },
-  btn:{ backgroundColor:'#7B1FA2', padding:14, borderRadius:10, alignItems:'center' },
-  bt:{ color:'#fff', fontWeight:'700' }
+  c: { flex: 1, backgroundColor: '#0b0b0f', padding: 16, gap: 12 },
+  t: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  in: {
+    backgroundColor: '#1d1d25',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 12,
+  },
+  btn: {
+    backgroundColor: '#7B1FA2',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  bt: { color: '#fff', fontWeight: '700' },
 });

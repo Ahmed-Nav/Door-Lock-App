@@ -11,7 +11,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { useRoute, useNavigation } from '@react-navigation/native'; 
 import { claimLockOnServer } from '../services/apiService';
-import { getOrCreateDeviceKey } from '../lib/keys';
+import { getOrCreateDeviceKey, saveClaimContext } from '../lib/keys';
 
 export default function ClaimLockScreen() {
   const { token, role, email } = useAuth();
@@ -46,6 +46,11 @@ export default function ClaimLockScreen() {
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
       setStatus('Claimed');
       Alert.alert('Claimed', `Lock ${lockId} claimed on server.`);
+      await saveClaimContext({
+        lockId: Number(lockId),
+        claimCode: claimCode.trim(),
+        adminPubB64: res.adminPubB64, 
+      });
       navigation.replace('Ownership', {
         lockId: Number(lockId),
         claimCode: claimCode.trim(),

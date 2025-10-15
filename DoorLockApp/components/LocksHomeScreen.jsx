@@ -1,5 +1,5 @@
 // DoorLockApp/components/LocksHomeScreen.jsx
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { listLocks } from '../services/apiService';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
-  const { token, role, signOut } = useAuth();
+  const { token, role } = useAuth();
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +26,7 @@ export default function LocksHomeScreen() {
       const arr = Array.isArray(res?.locks) ? res.locks : [];
       setLocks(arr);
       if (!Array.isArray(res?.locks)) {
-        // Server returned non-array; don’t crash — show a clear error once.
+        
         Alert.alert('Error loading locks', 'Server returned invalid format.');
       }
     } catch (e) {
@@ -47,13 +47,18 @@ export default function LocksHomeScreen() {
     }
   }, [token, role]);
 
-  
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const goClaim = () => nav.navigate('ClaimLock');
-  const goManage = (lockId) => nav.navigate('Groups', { lockId });
-  const goEdit   = (lockId, name) => nav.navigate('EditLock', { lockId, name });
-  const goUnlock = (lockId) => nav.navigate('Unlock', { lockId });
+  const goManage = lockId => nav.navigate('Groups', { lockId });
+  const goEdit = (lockId, name) =>
+    nav.navigate('EditLock', { lockId, currentName: name });
+  const goUnlock = lockId => nav.navigate('Unlock', { lockId });
+  const goResume = id => nav.navigate('Ownership', { lockId: id });
 
   const renderItem = ({ item }) => (
     <View style={s.card}>
@@ -63,15 +68,34 @@ export default function LocksHomeScreen() {
       </View>
 
       <View style={{ gap: 6 }}>
-        <TouchableOpacity style={s.smallBtn} onPress={() => goManage(item.lockId)}>
+        {item.claimed && !item.setupComplete && (
+          <TouchableOpacity
+            style={[s.smallBtn, { backgroundColor: '#7B1FA2' }]}
+            onPress={() => goResume(item.lockId)}
+          >
+            <Text style={s.smallBtnTxt}>Set Ownership</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={s.smallBtn}
+          onPress={() => goManage(item.lockId)}
+        >
           <Text style={s.smallBtnTxt}>Manage</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.smallBtn} onPress={() => goEdit(item.lockId, item.name)}>
+        <TouchableOpacity
+          style={s.smallBtn}
+          onPress={() => goEdit(item.lockId, item.name)}
+        >
           <Text style={s.smallBtnTxt}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.smallBtn, { backgroundColor: '#7B1FA2' }]} onPress={() => goUnlock(item.lockId)}>
-          <Text style={s.smallBtnTxt}>Unlock</Text>
-        </TouchableOpacity>
+        {item.setupComplete && (
+          <TouchableOpacity
+            style={[s.smallBtn, { backgroundColor: '#7B1FA2' }]}
+            onPress={() => goUnlock(item.lockId)}
+          >
+            <Text style={s.smallBtnTxt}>Unlock</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -85,19 +109,15 @@ export default function LocksHomeScreen() {
       ) : (
         <FlatList
           data={locks}
-          keyExtractor={(it) => String(it.lockId)}
+          keyExtractor={it => String(it.lockId)}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 100 }}
         />
       )}
 
-      
       <TouchableOpacity style={s.fab} onPress={goClaim}>
         <Text style={s.fabTxt}>＋</Text>
       </TouchableOpacity>
-
-      
-
     </View>
   );
 }
@@ -134,17 +154,24 @@ const s = StyleSheet.create({
     right: 18,
     bottom: 78,
     backgroundColor: '#7B1FA2',
-    width: 54, height: 54, borderRadius: 27,
-    alignItems: 'center', justifyContent: 'center',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
     elevation: 5,
   },
   fabTxt: { color: 'white', fontSize: 28, lineHeight: 28 },
 
   signOut: {
     position: 'absolute',
-    left: 16, right: 16, bottom: 16,
+    left: 16,
+    right: 16,
+    bottom: 16,
     backgroundColor: '#8B0000',
-    padding: 14, borderRadius: 12, alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
   },
   signOutTxt: { color: 'white', fontWeight: '700' },
 });

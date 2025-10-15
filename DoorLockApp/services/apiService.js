@@ -180,3 +180,17 @@ export const updateUserRole = async (token, userId, role) => {
   const r = await api.patch(`/users/${userId}/role`, { role }, auth(token));
   return r.data; 
 };
+
+export async function deleteLock(token, lockId) {
+  const res = await api.delete(`/locks/${lockId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}
+
+export async function patchLock(token, lockId, body) {
+  const res = await api.patch(`/locks/${lockId}`, body, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}

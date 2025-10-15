@@ -5,7 +5,7 @@ const { requireAdmin } = require("../middleware/requireRole");
 const Group = require("../models/Group");
 const User = require("../models/User");
 
-router.use(verifyClerkOidc);
+router.use("/groups", verifyClerkOidc);
 
 // ---------- create/list ----------
 router.post("/groups", requireAdmin, async (req, res) => {

@@ -6,7 +6,10 @@ const { connectDB } = require("../services/db");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin } = require("../middleware/requireRole");
 const Lock = require("../models/Lock");
-const { parseLockId, requireString } = require("../middleware/validate");
+
+const AclVersion = require("../models/AclVersion");
+const LockKey = require("../models/LockKey");
+const Group = require("../models/Group");
 
 router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
   try {
@@ -17,13 +20,17 @@ router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
     if (!ownerId)
       return res.status(401).json({ ok: false, err: "unauthorized" });
 
-    const docs = await Lock.find({ ownerId }).lean();
+    const docs = await Lock.find({ ownerAccountId: req.userId, claimed: true })
+      .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
+      .lean();
 
     const locks = (docs || []).map((d) => ({
       lockId: d.lockId,
       name: d.name || `Lock #${d.lockId}`,
       claimed: !!d.claimed,
+      setupComplete: !!d.setupComplete,
     }));
+
 
     return res.json({ ok: true, locks });
   } catch (e) {
@@ -37,43 +44,73 @@ router.patch(
   "/locks/:lockId",
   verifyClerkOidc,
   requireAdmin,
-  async (req, res, next) => {
+  async (req, res) => {
     try {
       await connectDB();
-      const lockId = parseLockId(req.params.lockId);
-      const name = requireString(req.body?.name, "name", { min: 1, max: 80 });
-      const ownerId = req.userId;
+      const lockId = Number(req.params.lockId);
+      if (!Number.isFinite(lockId)) {
+        return res.status(400).json({ ok: false, err: "bad-lockId" });
+      }
 
-      if (!lockId || !name)
-        return res.status(400).json({ ok: false, err: "bad-input" });
+      const updates = {};
+      if (typeof req.body?.name === "string")
+        updates.name = String(req.body.name).trim();
+      if (typeof req.body?.setupComplete === "boolean")
+        updates.setupComplete = req.body.setupComplete;
 
       const doc = await Lock.findOneAndUpdate(
-        { lockId, ownerId },
-        { name },
+        { lockId, ownerAccountId: req.userId },
+        { $set: updates },
         { new: true }
       ).lean();
 
       if (!doc) {
-        const e = new Error("not-found");
-        e.code = "NOT_FOUND";
-        e.status = 404;
-        throw e;
+        return res
+          .status(404)
+          .json({ ok: false, err: "not-found-or-not-owner" });
       }
-
-      return res.json({
-        ok: true,
-        lock: {
-          lockId: doc.lockId,
-          name: doc.name || `Lock #${doc.lockId}`,
-          claimed: !!doc.claimed,
-        },
-      });
+      return res.json({ ok: true, lock: doc });
     } catch (e) {
-      console.error("PATCH /api/locks/:lockId failed:", e?.stack || e);
+      console.error("PATCH /locks/:lockId failed:", e);
       return res.status(500).json({ ok: false, err: "server-error" });
     }
-    next(e);
   }
 );
+
+
+router.delete(
+  "/locks/:lockId",
+  verifyClerkOidc,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      await connectDB();
+      const lockId = Number(req.params.lockId);
+      if (!Number.isFinite(lockId))
+        return res.status(400).json({ ok: false, err: "bad-lockId" });
+
+      const lock = await Lock.findOne({ lockId }).lean();
+      if (!lock) return res.status(404).json({ ok: false, err: "not-found" });
+      if (lock.ownerAccountId !== req.userId) {
+        return res.status(403).json({ ok: false, err: "forbidden" });
+      }
+
+      await Promise.all([
+        AclVersion.deleteMany({ lockId }),
+        LockKey.deleteMany({ lockId }),
+        Group.updateMany({}, { $pull: { lockIds: lockId } }),
+        Lock.deleteOne({ lockId }),
+      ]);
+
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("DELETE /locks/:lockId failed:", e);
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
+
+
+
 
 module.exports = router;
