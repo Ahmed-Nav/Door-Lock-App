@@ -87,7 +87,7 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
 }
 
 // ---------- Phase II helpers (unchanged behaviour) ----------
-function waitForCfgResult(device, timeoutMs = 12000) {
+function waitForCfgResult(device, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     let done = false;
     const sub = device.monitorCharacteristicForService(
@@ -166,11 +166,21 @@ export async function sendAcl(device, envelope) {
     value,
   );
 
-  const res = await waiter; // { ok:true } or { ok:false, err:... }
-  if (!res?.ok) throw new Error('ACL failed: ' + (res?.err || 'unknown'));
-  return res;
+  const res = await waiter;
+  if (!res?.ok) {
+    const friendly = {
+      'bad-b64': 'Bad base64 payload',
+      'bad-json': 'Malformed JSON',
+      'bad-sig': 'Admin signature verification failed',
+      'lid/ver': 'LockId mismatch or version not newer',
+      'bad-userpub':
+        'One or more user public keys invalid (must be 65B uncompressed)',
+    };
+    throw new Error(
+      `ACL failed: ${friendly[res?.err] || res?.err || 'unknown'}`,
+    );
+  }
 }
-
 
 // -------------------- Phase III helpers --------------------
 export async function getChallengeOnce(device, timeoutMs = 5000) {

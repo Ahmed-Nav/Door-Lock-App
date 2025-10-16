@@ -1,10 +1,11 @@
+// DoorLockApp/components/UserManagementScreen.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { listUsers, updateUserRole } from '../services/apiService';
 import { useAuth } from '../auth/AuthContext';
 
 export default function UserManagementScreen() {
-  const { token, role } = useAuth();
+  const { token, role, email: currentEmail } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,6 +54,7 @@ export default function UserManagementScreen() {
     <View style={styles.card}>
       <Text style={styles.email}>{item.email}</Text>
       <Text style={styles.role}>Role: {item.role}</Text>
+      {item.email !== currentEmail && (
       <TouchableOpacity
         style={[
           styles.btn,
@@ -64,6 +66,7 @@ export default function UserManagementScreen() {
           {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
         </Text>
       </TouchableOpacity>
+    )}
     </View>
   );
 

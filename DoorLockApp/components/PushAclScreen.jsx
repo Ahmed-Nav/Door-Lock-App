@@ -98,10 +98,12 @@ export default function PushAclScreen() {
         return;
       }
 
-      console.log(
-        'sig bytes:',
-        Buffer.from(String(envelope?.sig || ''), 'base64').length,
-      );
+      const sigBytes = Buffer.from(
+        String(envelope?.sig || ''),
+        'base64',
+      ).length;
+      const jsonStr = JSON.stringify(envelope);
+      console.log('[ACL] sig bytes:', sigBytes, 'json bytes:', jsonStr.length);
       for (const u of envelope?.payload?.users || []) {
         const pb = Buffer.from(String(u?.pub || ''), 'base64');
         console.log(`kid ${u?.kid}: pub bytes=${pb.length} first=${pb[0]}`);
@@ -131,7 +133,7 @@ export default function PushAclScreen() {
       <TextInput
         style={s.in}
         value={lockId}
-        onChangeText={setLockId}
+        editable={false}
         placeholder="Lock ID"
         keyboardType="numeric"
       />
@@ -146,12 +148,15 @@ export default function PushAclScreen() {
       <TextInput
         style={s.box}
         value={text}
-        onChangeText={setText}
+        editable={false}
         placeholder="ACL_envelope.json"
         multiline
       />
 
-      <Text style={s.status}>Status: {status}</Text>
+      <Text style={s.status}>
+        Status: {status}
+        {'\n'}Envelope bytes: {text?.length || 0}
+      </Text>
     </View>
   );
 }

@@ -67,7 +67,6 @@ export default function GroupDetail() {
     const groupUsers = g?.users?.map((u: any) => u.email) || [];
     const groupLocks = g?.lockIds || [];
 
-    // Extract arrays safely regardless of backend shape
     const usersArray = Array.isArray(usersRes)
       ? usersRes
       : usersRes?.users || [];
@@ -75,7 +74,6 @@ export default function GroupDetail() {
       ? locksRes
       : locksRes?.locks || [];
 
-    // Log once for confirmation
     console.log('Dropdown → users:', usersArray);
     console.log('Dropdown → locks:', locksArray);
 
@@ -173,49 +171,69 @@ export default function GroupDetail() {
     <View style={s.c}>
       <Text style={s.h}>Group: {g.name}</Text>
 
-      
       <Text style={s.sub}>Add User</Text>
-      <DropDownPicker
-        open={userOpen}
-        value={selectedUser}
-        items={userOptions}
-        setOpen={setUserOpen}
-        setValue={setSelectedUser}
-        setItems={setUserOptions}
-        placeholder="Select user"
-        style={s.dropdown}
-        textStyle={{ color: 'white' }}
-        dropDownContainerStyle={s.dropdownContainer}
-        placeholderStyle={{ color: '#888' }}
-      />
-      <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doAddUser}>
+      <View
+        style={{
+          zIndex: userOpen ? 2000 : 1000,
+          elevation: userOpen ? 2000 : 1000,
+        }}
+      >
+        <DropDownPicker
+          open={userOpen}
+          value={selectedUser}
+          items={userOptions}
+          setOpen={setUserOpen}
+          setValue={setSelectedUser}
+          setItems={setUserOptions}
+          placeholder="Select user"
+          style={s.dropdown}
+          textStyle={{ color: 'white' }}
+          dropDownContainerStyle={s.dropdownContainer}
+          placeholderStyle={{ color: '#888' }}
+          onOpen={() => setLockOpen(false)}
+        />
+      </View>
+      <TouchableOpacity
+        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
+        onPress={doAddUser}
+      >
         <Text style={s.btnText}>Add user</Text>
       </TouchableOpacity>
 
-      
       <Text style={[s.sub, { marginTop: 12 }]}>Assign Lock</Text>
-      <DropDownPicker
-        open={lockOpen}
-        value={selectedLock}
-        items={lockOptions}
-        setOpen={setLockOpen}
-        setValue={setSelectedLock}
-        setItems={setLockOptions}
-        placeholder="Select lock"
-        style={s.dropdown}
-        textStyle={{ color: 'white' }}
-        dropDownContainerStyle={s.dropdownContainer}
-        placeholderStyle={{ color: '#888' }}
-      />
-      <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doAssignLock}>
+      <View
+        style={{
+          zIndex: lockOpen ? 2000 : 1000,
+          elevation: lockOpen ? 2000 : 1000,
+        }}
+      >
+        <DropDownPicker
+          open={lockOpen}
+          value={selectedLock}
+          items={lockOptions}
+          setOpen={setLockOpen}
+          setValue={setSelectedLock}
+          setItems={setLockOptions}
+          placeholder="Select lock"
+          style={s.dropdown}
+          textStyle={{ color: 'white' }}
+          dropDownContainerStyle={s.dropdownContainer}
+          placeholderStyle={{ color: '#888' }}
+          // 👇 closes user dropdown safely
+          onOpen={() => setUserOpen(false)}
+        />
+      </View>
+      <TouchableOpacity
+        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
+        onPress={doAssignLock}
+      >
         <Text style={s.btnText}>Assign lock</Text>
       </TouchableOpacity>
 
-     
       <Text style={s.t2}>Users</Text>
       <FlatList
         data={g.users}
-        keyExtractor={(u) => u.id}
+        keyExtractor={u => u.id}
         renderItem={({ item }) => (
           <View style={s.rowItem}>
             <Text style={s.rowText}>{item.email}</Text>
@@ -230,11 +248,10 @@ export default function GroupDetail() {
         ListEmptyComponent={<Text style={s.empty}>No users</Text>}
       />
 
-      
       <Text style={[s.t2, { marginTop: 12 }]}>Locks</Text>
       <FlatList
         data={g.lockIds}
-        keyExtractor={(id) => String(id)}
+        keyExtractor={id => String(id)}
         renderItem={({ item }) => (
           <View style={s.rowItem}>
             <Text style={s.rowText}>Lock #{item}</Text>
@@ -249,7 +266,10 @@ export default function GroupDetail() {
         ListEmptyComponent={<Text style={s.empty}>No locks</Text>}
       />
 
-      <TouchableOpacity style={[s.btn, { backgroundColor: '#6b21a8', marginTop: 16 }]} onPress={doDeleteGroup}>
+      <TouchableOpacity
+        style={[s.btn, { backgroundColor: '#6b21a8', marginTop: 16 }]}
+        onPress={doDeleteGroup}
+      >
         <Text style={s.btnText}>Delete Group</Text>
       </TouchableOpacity>
     </View>

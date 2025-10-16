@@ -41,18 +41,22 @@ export default function OwnershipScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!token || !Number.isFinite(id)) return;
       const id = Number(initialLockId);
+      if (!token || !Number.isFinite(id)) return;
       try {
         const saved = await loadClaimContext(id);
+        console.log('Loaded claim context:', saved);
         if (!cancelled && saved) {
           setLockId(String(id));
           setClaimCode(saved.claimCode);
           setAdminPubB64(saved.adminPubB64);
           return;
         }
-        // 2) Fallback to server admin pub if no saved context
+        
         const r = await getAdminPub(token);
+
+        console.log('Fetched admin pub from server:', r);
+
         if (!cancelled && r?.ok && r?.pub) setAdminPubB64(r.pub.trim());
         if (!cancelled && (!r?.ok || !r?.pub)) {
           console.log('admin pub missing from server', r);
