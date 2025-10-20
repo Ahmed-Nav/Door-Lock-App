@@ -12,6 +12,7 @@ import {
   useCameraDevice,
   useCodeScanner,
 } from 'react-native-vision-camera';
+import Toast from 'react-native-toast-message';
 
 function parseClaim(text = '') {
   const s = String(text).trim();
@@ -44,7 +45,7 @@ export default function ClaimQrScreen() {
         }
         if (!mounted) return;
         if (!isOK(s)) {
-          Alert.alert('Camera permission required');
+          Toast.show({ type: 'error', text1: 'Camera permission required' })
           nav.goBack();
           return;
         }
@@ -59,7 +60,7 @@ export default function ClaimQrScreen() {
   );
 
   const codeScanner = useCodeScanner({
-    codeTypes: ['qr', 'data-matrix', 'ean-13', 'code-128'], // include what you need
+    codeTypes: ['qr', 'data-matrix', 'ean-13', 'code-128'], 
     onCodeScanned: codes => {
       if (handled) return;
       const value = codes?.[0]?.value;
@@ -67,7 +68,7 @@ export default function ClaimQrScreen() {
       const parsed = parseClaim(value);
       setHandled(true);
       if (!parsed) {
-        Alert.alert('Invalid QR', 'Expected "lock:<id>;code:<claim>"');
+        Toast.show({ type: 'error', text1: 'Invalid QR', text2: 'Expected "lock:<id>;code:<claim>' })
         return;
       }
       nav.navigate('ClaimLock', {

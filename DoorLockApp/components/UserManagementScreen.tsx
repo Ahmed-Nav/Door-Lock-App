@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { listUsers, updateUserRole } from '../services/apiService';
 import { useAuth } from '../auth/AuthContext';
+import Toast from 'react-native-toast-message';
 
 export default function UserManagementScreen() {
   const { token, role, email: currentEmail } = useAuth();
@@ -16,7 +17,7 @@ export default function UserManagementScreen() {
       setUsers(data);
     } catch (err: any) {
       console.error('listUsers failed:', err?.response?.data || err);
-      Alert.alert('Error', 'Failed to load users.');
+      Toast.show({ type: 'error', text1: 'Failed to load users.' })
     } finally {
       setLoading(false);
     }
@@ -26,17 +27,17 @@ export default function UserManagementScreen() {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
     try {
       await updateUserRole(token, userId, newRole);
-      Alert.alert('Success', `User role updated to ${newRole}`);
+      Toast.show({ type: 'success', text1: `User role updated to ${newRole}` })
       fetchUsers();
     } catch (err: any) {
       console.error('updateUserRole failed:', err?.response?.data || err);
-      Alert.alert('Error', 'Failed to update role.');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update role.' })
     }
   };
 
   useEffect(() => {
     if (role !== 'admin') {
-      Alert.alert('Access Denied', 'You are not authorized to view this page.');
+      Toast.show({ type: 'info', text1: 'Access Denied', text2: 'You are not authorized to view this page.' })
       return;
     }
     fetchUsers();

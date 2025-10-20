@@ -12,6 +12,7 @@ import { Buffer } from 'buffer';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useAuth } from '../auth/AuthContext';
 import { rebuildAcl } from '../services/apiService';
+import Toast from 'react-native-toast-message';
 
 function coerceSigToB64(sig) {
   if (!sig) return null;
@@ -49,8 +50,8 @@ export default function RebuildAclScreen() {
 
   const go = async () => {
     try {
-      if (!token) return Alert.alert('Not signed in', 'Please sign in first.');
-      if (role !== 'admin') return Alert.alert('Forbidden', 'Admin only.');
+      if (!token) return Toast.show({ type: 'info', text1: 'Not signed in', text2: 'Please sign in first.' }) 
+      if (role !== 'admin') return Toast.show({ type: 'info', text1: 'Forbidden', text2: 'Admin only.' }) 
       setStatus('Rebuilding…');
       setResult(null);
       const res = await rebuildAcl(token, Number(lockId));
@@ -68,10 +69,7 @@ export default function RebuildAclScreen() {
       setStatus('Done');
     } catch (e) {
       setStatus('Failed');
-      Alert.alert(
-        'Rebuild failed',
-        String(e?.response?.data?.err || e?.message || e),
-      );
+      Toast.show({ type: 'error', text1: 'Rebuild failed', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   };
 
@@ -79,7 +77,7 @@ export default function RebuildAclScreen() {
     try {
       if (!result?.envelope) return;
       Clipboard.setString(JSON.stringify(result.envelope, null, 2));
-      Alert.alert('Copied', 'ACL envelope copied to clipboard');
+      Toast.show({ type: 'success', text1: 'Copied', text2: 'User Access copied to clipboard' })
     } catch {}
   };
 

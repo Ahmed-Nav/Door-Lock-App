@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { signInWithClient } from '../services/auth';
 import { ADMIN_CLIENT_ID, USER_CLIENT_ID } from '../services/oidc';
 import { useNavigation } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 
 export default function SignInScreen() {
   const nav = useNavigation();
@@ -17,10 +18,7 @@ export default function SignInScreen() {
         routes: [{ name: role === 'admin' ? 'AdminHome' : 'Unlock' }],
       });
     } catch (e) {
-      Alert.alert(
-        'Sign in failed',
-        String(e?.response?.data?.error || e?.message || e),
-      );
+      Toast.show({ type: 'error', text1: 'Sign in failed', text2: String(e?.response?.data?.error || e?.message || e) })
     }
   };
 

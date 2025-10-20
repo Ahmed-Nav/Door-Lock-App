@@ -11,6 +11,7 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { listLocks } from '../services/apiService';
+import Toast from 'react-native-toast-message';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
@@ -26,8 +27,7 @@ export default function LocksHomeScreen() {
       const arr = Array.isArray(res?.locks) ? res.locks : [];
       setLocks(arr);
       if (!Array.isArray(res?.locks)) {
-        
-        Alert.alert('Error loading locks', 'Server returned invalid format.');
+        Toast.show({ type: 'error', text1: 'Error loading locks', text2: 'Server returned invalid format.' })
       }
     } catch (e) {
       console.log('listLocks failed', {
@@ -35,12 +35,9 @@ export default function LocksHomeScreen() {
         data: e?.response?.data,
         message: e?.message,
       });
-      Alert.alert(
-        'Error loading locks',
-        String(
+      Toast.show({ type: 'error', text1: 'Error loading locks', text2: String(
           e?.response?.data?.err || e?.response?.data?.error || e?.message || e,
-        ),
-      );
+        ) })
       setLocks([]);
     } finally {
       setLoading(false);

@@ -1,157 +1,309 @@
 // App.tsx
+
 import React from 'react';
+
 import 'react-native-gesture-handler';
+
 import { NavigationContainer } from '@react-navigation/native';
+
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
+
+import * as Sentry from '@sentry/react-native';
+
+
 
 import { AuthProvider, useAuth } from './auth/AuthContext';
 
 
 import RoleSelectScreen from './components/RoleSelectScreen';
+
 import UnlockScreen from './components/UnlockScreen';
 
-
 import AdminHomeScreen from './components/AdminHomeScreen';      
+
 import GroupsScreen from './components/GroupsScreen';
+
 import GroupDetail from './components/GroupDetail';
+
 import PushAclScreen from './components/PushAclScreen';
+
 import ClaimLockScreen from './components/ClaimLockScreen';
+
 import ClaimQrScreen from './components/ClaimQrScreen';
+
 import RebuildAclScreen from './components/RebuildAclScreen';
+
 import OwnershipScreen from './components/OwnershipScreen';
+
 import LocksHomeScreen from './components/LocksHomeScreen';
+
 import EditLockModal from './components/EditLockModal';
+
 import UserManagementScreen from './components/UserManagementScreen';
+
+
+
 
 
 export type RootStackParamList = {
 
+
   AdminHome: undefined;
-  
+
   RoleSelect: undefined;
 
-  
   Unlock: undefined;
-
 
   LocksHome: undefined;
 
-  
   UserManagement: undefined;
 
   EditLock: { lockId: number; name?: string };
+
   ClaimLock: undefined;
+
   ClaimQr: undefined;
 
-  
   Groups: { lockId: number; lockName?: string } | undefined;
 
   GroupDetail: { groupId: string };
 
-  
   PushAcl: { lockId: number; envelope?: any };
 
-  RebuildAcl: undefined; 
+  RebuildAcl: undefined;
+
   Ownership: undefined;
+
 };
+
+
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const toastConfig = {
+
+  success: (props) => (
+    <BaseToast
+      {...props}
+      style={{ 
+        borderLeftColor: '#69C779',
+        width: '90%', // Increase width
+      }}
+      contentContainerStyle={{ paddingHorizontal: 15 }}
+      text1Style={{
+        fontSize: 15,
+        fontWeight: '400'
+      }}
+    />
+  ),
+
+  error: (props) => (
+    <ErrorToast
+      {...props}
+      style={{ 
+        borderLeftColor: '#FE6301',
+        width: '90%', // Increase width
+      }}
+      text1Style={{
+        fontSize: 17
+      }}
+      text2Style={{
+        fontSize: 15
+      }}
+    />
+  ),
+};
+
 function Router() {
+
   const { role, loading } = useAuth();
+
   if (loading) return null;
 
-
   if (!role) {
-    return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
-      </Stack.Navigator>
-    );
-  }
 
+    return (
+
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+
+        <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
+
+      </Stack.Navigator>
+
+    );
+
+  }
 
   if (role === 'admin') {
+
     return (
+
       <Stack.Navigator>
+
         <Stack.Screen
+
           name="AdminHome"
+
           component={AdminHomeScreen}
+
           options={{ title: 'Admin Dashboard' }}
+
         />
+
         <Stack.Screen
+
           name="LocksHome"
+
           component={LocksHomeScreen}
+
           options={{ title: 'My Locks' }}
+
         />
+
         <Stack.Screen
+
           name="UserManagement"
+
           component={UserManagementScreen}
+
           options={{ title: 'Manage Users' }}
+
         />
+
         <Stack.Screen
+
           name="EditLock"
+
           component={EditLockModal}
+
           options={{ title: 'Edit Lock' }}
+
         />
+
         <Stack.Screen
+
           name="ClaimLock"
+
           component={ClaimLockScreen}
+
           options={{ title: 'Claim Lock' }}
+
         />
+
         <Stack.Screen
+
           name="ClaimQr"
+
           component={ClaimQrScreen}
+
           options={{ title: 'Scan Claim QR' }}
+
         />
+
         <Stack.Screen
+
           name="Groups"
+
           component={GroupsScreen}
+
           options={{ title: 'Groups' }}
+
         />
+
         <Stack.Screen
+
           name="GroupDetail"
+
           component={GroupDetail}
+
           options={{ title: 'Group Detail' }}
+
         />
+
         <Stack.Screen
+
           name="PushAcl"
+
           component={PushAclScreen}
+
           options={{ title: 'Push ACL' }}
+
         />
+
         <Stack.Screen
+
           name="RebuildAcl"
+
           component={RebuildAclScreen}
+
           options={{ title: 'Rebuild ACL' }}
+
         />
+
         <Stack.Screen
+
           name="Ownership"
+
           component={OwnershipScreen}
+
           options={{ title: 'Ownership' }}
+
         />
+
         <Stack.Screen
+
           name="Unlock"
+
           component={UnlockScreen}
+
           options={{ title: 'Unlock' }}
+
         />
+
       </Stack.Navigator>
+
     );
+
   }
 
-  
   return (
+
     <Stack.Navigator>
+
       <Stack.Screen name="Unlock" component={UnlockScreen} options={{ title: 'Unlock' }} />
+
     </Stack.Navigator>
+
   );
+
 }
 
+Sentry.init({
+
+  dsn: 'https://49ab8207598b32992f60b0987ea96578@o4510216465940480.ingest.us.sentry.io/4510216467120128',
+
+  tracesSampleRate: 1.0,
+
+})
+
 export default function App() {
+
   return (
+
     <AuthProvider>
+
       <NavigationContainer>
+
         <Router />
+
       </NavigationContainer>
+
+      <Toast config={toastConfig} position='bottom'/>
+
     </AuthProvider>
+
   );
+
 }

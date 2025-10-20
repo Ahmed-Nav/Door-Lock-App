@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import RNAndroidLocationEnabler from 'react-native-android-location-enabler';
-import { scanAndConnectForLockId, sendOwnershipSet } from '../ble/bleManager';
+import { scanAndConnectForLockId, sendOwnershipSet, safeDisconnect } from '../ble/bleManager';
 import { useAuth } from '../auth/AuthContext';
 import { getAdminPub, patchLock } from '../services/apiService';
 import { loadClaimContext, clearClaimContext } from '../lib/keys';
+import Toast from 'react-native-toast-message';
 
 export default function OwnershipScreen() {
   const navigation = useNavigation();
@@ -98,10 +99,7 @@ export default function OwnershipScreen() {
 
   const onSend = async () => {
     if (!lockId || !claimCode || !adminPubB64) {
-      return Alert.alert(
-        'Missing data',
-        'Lock ID, Claim Code and Admin Pub are required.',
-      );
+      return Toast.show({ type: 'error', text1: 'Missing data', text2: 'Lock ID, Claim Code and Admin Key are required.' }) 
     }
     setBusy(true);
     setStatus('Scanning…');
@@ -139,12 +137,9 @@ export default function OwnershipScreen() {
       );
     } catch (e) {
       setStatus('Error');
-      Alert.alert('Error', String(e?.message || e));
+      Toast.show({ type: 'error', text1: String(e?.message || e) })
     } finally {
-      try {
-        if (device) await device.cancelConnection();
-      } catch {}
-      setBusy(false);
+      await safeDisconnect(device);
     }
   };
 

@@ -1,4 +1,3 @@
-// ble/bleManager.js
 import { BleManager } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
 
@@ -8,8 +7,7 @@ export const UUIDS = {
   CFG_STATE: '0000c0f1-0000-1000-8000-00805f9b34fb',
   CFG_OWNERSHIP: '0000c0f2-0000-1000-8000-00805f9b34fb',
   CFG_ACL: '0000c0f3-0000-1000-8000-00805f9b34fb',
-  CFG_RESULT: '0000c0f4-0000-1000-8000-00805f9b34fb',
-  // Auth
+  CFG_RESULT: '0000c0f4-0000-1000-8000-00805f9b34fb', // Auth
   AUTH_SERVICE: '0000a000-0000-1000-8000-00805f9b34fb',
   AUTH_CHALLENGE: '0000a001-0000-1000-8000-00805f9b34fb', // 20B = 16 nonce + 4 lockId (BE)
   AUTH_RESPONSE: '0000a002-0000-1000-8000-00805f9b34fb', // write {kid,sig:b64(raw r||s)}
@@ -19,6 +17,12 @@ export const UUIDS = {
 const manager = new BleManager();
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const __disconnecting = new Set();
+
+// GLOBAL MAP: Used to track all active subscriptions that need manual, crash-proof cleanup.
+const __activeSubs = new Map();
+// Track in-progress connect promises per device to avoid duplicate simultaneous connects
+const __connectPromises = new Map();
 
 function parseB64JsonOrNull(b64) {
   if (!b64) return null;
@@ -54,10 +58,23 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
           }
           if (!device) return;
 
-          try {
-            const d = await manager.connectToDevice(device.id, {
-              timeout: 7000,
-            });
+            try {
+            // Prevent concurrent connect attempts to the same device which can
+            // cause native library races (BleAlreadyConnectedException / onError)
+            async function connectOnce(id) {
+              if (__connectPromises.has(id)) return __connectPromises.get(id);
+              const p = (async () => {
+                try {
+                  return await manager.connectToDevice(id, { timeout: 7000 });
+                } finally {
+                  __connectPromises.delete(id);
+                }
+              })();
+              __connectPromises.set(id, p);
+              return p;
+            }
+
+            const d = await connectOnce(device.id);
             await d.discoverAllServicesAndCharacteristics();
             try {
               await d.requestMTU(185);
@@ -65,9 +82,8 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
             try {
               await d.requestConnectionPriority('high');
             } catch {}
-            await sleep(250); // small settle
+            await sleep(250);
 
-            // verify lockId via CFG_STATE
             const c = await d.readCharacteristicForService(
               UUIDS.CFG_SERVICE,
               UUIDS.CFG_STATE,
@@ -78,7 +94,9 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
               manager.stopDeviceScan();
               return resolve(d);
             }
-            await d.cancelConnection();
+            try {
+              await d.cancelConnection();
+            } catch {}
           } catch (_) {}
         },
       );
@@ -86,30 +104,40 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
   });
 }
 
-// ---------- Phase II helpers (unchanged behaviour) ----------
+// ---------- Phase II helpers (MONITORS ONLY TRACK, DO NOT CLEAN UP) ----------
 function waitForCfgResult(device, timeoutMs = 20000) {
+  const transactionId = `cfg-${device.id}-${Date.now()}`;
   return new Promise((resolve, reject) => {
     let done = false;
     const sub = device.monitorCharacteristicForService(
       UUIDS.CFG_SERVICE,
       UUIDS.CFG_RESULT,
-      (_e, c) => {
+      (error, c) => {
         if (done) return;
-        const js = parseB64JsonOrNull(c?.value);
-        if (!js) return; // ignore empties
+
+        if (error) {
+          done = true;
+          __activeSubs.delete(transactionId);
+          return reject(new Error(error.message || 'CFG_RESULT monitor-error'));
+        }
+
+        if (!c?.value) return;
+        const js = parseB64JsonOrNull(c.value);
+        if (!js) return;
+
         done = true;
-        try {
-          sub.remove();
-        } catch {}
+        __activeSubs.delete(transactionId); // Clean map
         resolve(js);
       },
+      transactionId, // Assign Transaction ID
     );
+
+    __activeSubs.set(transactionId, sub); // Track subscription object
+
     setTimeout(() => {
       if (done) return;
       done = true;
-      try {
-        sub.remove();
-      } catch {}
+      __activeSubs.delete(transactionId); // Clean map on timeout
       reject(new Error('Timeout waiting for CFG_RESULT'));
     }, timeoutMs);
   });
@@ -119,10 +147,16 @@ export async function sendOwnershipSet(
   device,
   { lockId, adminPubB64, claimCode },
 ) {
-  const value = Buffer.from(
-    JSON.stringify({ lockId, adminPub: adminPubB64, claimCode }),
-    'utf8',
-  ).toString('base64');
+  const valueJson = JSON.stringify({
+    lockId,
+    adminPub: adminPubB64,
+    claimCode,
+  });
+
+  let value = Buffer.from(valueJson, 'utf8').toString('base64');
+
+  value = value.replace(/[^A-Za-z0-9+/=]/g, '');
+
   const waiter = waitForCfgResult(device);
   await sleep(150);
   await device.writeCharacteristicWithResponseForService(
@@ -130,6 +164,7 @@ export async function sendOwnershipSet(
     UUIDS.CFG_OWNERSHIP,
     value,
   );
+  await sleep(300);
   const res = await waiter;
   if (!res?.ok) throw new Error('Ownership failed: ' + (res?.err || 'unknown'));
   return res;
@@ -149,13 +184,11 @@ export async function sendAcl(device, envelope) {
         `User "${u?.kid || '?'}" pub must be 65 bytes uncompressed (0x04...)`,
       );
     }
-  }
+  } // 2) Prepare the base64 of the WHOLE JSON envelope
 
-  // 2) Prepare the base64 of the WHOLE JSON envelope
   const json = JSON.stringify(envelope);
-  let value = Buffer.from(json, 'utf8').toString('base64');
+  let value = Buffer.from(json, 'utf8').toString('base64'); // 3) Belt & suspenders: remove any non-base64 chars (e.g. CR/LF/spaces)
 
-  // 3) Belt & suspenders: remove any non-base64 chars (e.g. CR/LF/spaces)
   value = value.replace(/[^A-Za-z0-9+/=]/g, '');
 
   const waiter = waitForCfgResult(device);
@@ -165,7 +198,7 @@ export async function sendAcl(device, envelope) {
     UUIDS.CFG_ACL,
     value,
   );
-
+  await sleep(300);
   const res = await waiter;
   if (!res?.ok) {
     const friendly = {
@@ -196,60 +229,90 @@ export async function getChallengeOnce(device, timeoutMs = 5000) {
     }
   } catch (e) {
     console.log('A001 read err:', e?.message);
-  }
+  } // 2) monitor for first notify
 
-  // 2) monitor for first notify
   return new Promise((resolve, reject) => {
+    const transactionId = `challenge-${device.id}-${Date.now()}`; // Unique ID
     let done = false;
     const sub = device.monitorCharacteristicForService(
       UUIDS.AUTH_SERVICE,
       UUIDS.AUTH_CHALLENGE,
-      (_e, c) => {
-        if (done || !c?.value) return;
+      (error, c) => {
+        if (done) return;
+        if (error) {
+          console.log('[BLE] AUTH_CHALLENGE error:', error.message);
+          done = true;
+          __activeSubs.delete(transactionId); // Cleanup map on error
+          reject(error);
+          return;
+        }
+        if (!c?.value) return;
         const buf = Buffer.from(c.value, 'base64');
         if (buf.length !== 20) return;
         done = true;
-        try {
-          sub.remove();
-        } catch {}
+        __activeSubs.delete(transactionId); // Cleanup map on success
         resolve(buf);
       },
+      transactionId, // Assign Transaction ID
     );
+
+    __activeSubs.set(transactionId, sub); // Track the subscription
+
     setTimeout(() => {
       if (done) return;
       done = true;
-      try {
-        sub.remove();
-      } catch {}
+      __activeSubs.delete(transactionId); // Cleanup map on timeout
       reject(new Error('Challenge timeout (A001)'));
     }, timeoutMs);
   });
 }
 
 export function waitAuthResult(device, timeoutMs = 10000) {
-  return new Promise((resolve, reject) => {
+  const transactionId = `auth-${device.id}-${Date.now()}`; // Unique ID
+  return new Promise(resolve => {
     let done = false;
+    console.log('[BLE] waitAuthResult: subscribing to AUTH_RESULT…');
+
     const sub = device.monitorCharacteristicForService(
       UUIDS.AUTH_SERVICE,
       UUIDS.AUTH_RESULT,
-      (_e, c) => {
-        if (done || !c?.value) return;
-        const js = parseB64JsonOrNull(c.value);
-        if (!js) return;
-        done = true;
+      (error, characteristic) => {
+        if (done) return;
+
+        if (error) {
+          console.log('[BLE] AUTH_RESULT error:', error.message || error);
+          done = true;
+          __activeSubs.delete(transactionId); // Cleanup map on error
+          resolve({ ok: false, err: error.message || 'monitor-error' });
+          return;
+        }
+
+        if (!characteristic?.value) return;
+
         try {
-          sub.remove();
-        } catch {}
-        resolve(js);
+          const raw = Buffer.from(characteristic.value, 'base64').toString(
+            'utf8',
+          );
+          console.log('[BLE] AUTH_RESULT raw:', raw);
+          const js = JSON.parse(raw);
+          done = true;
+          __activeSubs.delete(transactionId); // Cleanup map on success
+          resolve(js);
+        } catch (e) {
+          console.log('[BLE] AUTH_RESULT parse error:', e.message);
+        }
       },
+      transactionId, // Assign Transaction ID
     );
+
+    __activeSubs.set(transactionId, sub); // Track the subscription
+
     setTimeout(() => {
       if (done) return;
       done = true;
-      try {
-        sub.remove();
-      } catch {}
-      reject(new Error('Auth timeout'));
+      __activeSubs.delete(transactionId); // Cleanup map on timeout
+      console.log('[BLE] AUTH_RESULT timeout');
+      resolve({ ok: false, err: 'timeout' });
     }, timeoutMs);
   });
 }
@@ -266,8 +329,84 @@ export async function sendAuthResponse(device, kid, sigB64) {
   );
 }
 
-export async function safeDisconnect(device) {
+// 💡 safeDisconnect: THE CRASH ABATEMENT ROUTINE
+export async function safeDisconnect(device, { waitMs = 700 } = {}) {
   try {
-    await device.cancelConnection();
-  } catch {}
+    if (!device) return;
+    const id = device.id || device.deviceID || 'unknown';
+    console.log('[BLE] safeDisconnect start (Isolation Fix)', id);
+
+    if (__disconnecting.has(id)) {
+      console.log('[BLE] already disconnecting', id);
+      return;
+    }
+    __disconnecting.add(id); // 1. CRITICAL: FORCE UNSUBSCRIBE ALL MONITORS AND ABSORB CRASH
+
+    // Collect the keys to remove for this device to avoid mutating the map
+    const toRemove = [];
+    for (const [key] of __activeSubs.entries()) {
+      if (key.includes(id)) toRemove.push(key);
+    }
+
+    if (toRemove.length) {
+      console.log(`[BLE] Auto-unsubscribing ${toRemove.length} monitors for ${id} (staggered)...`);
+      // Schedule staggered removal to avoid bursting native calls that trigger races
+      let delay = 0;
+      for (const key of toRemove) {
+        const sub = __activeSubs.get(key);
+        // Schedule each removal slightly delayed
+        setTimeout(() => {
+          try {
+            if (sub && typeof sub.remove === 'function') {
+              console.log(`[BLE] Removing subscription ${key} (delayed=${delay}ms)`);
+              sub.remove();
+              console.log(`[BLE] Removed subscription ${key}`);
+            } else {
+              console.log(`[BLE] No valid subscription to remove for ${key}`);
+            }
+          } catch (e) {
+            // Log and absorb native crashes as before but keep removal async
+            console.log('--- NATIVE CRASH ABATED (delayed remove) ---');
+            console.log(`[BLE] sub.remove() caught FATAL error for ${key}:`, e?.message);
+            console.log('----------------------------');
+          } finally {
+            __activeSubs.delete(key);
+          }
+        }, delay);
+        delay += 80; // 80ms gap between removals
+      }
+      // Wait a bit longer than the total scheduled delay for native bridge to settle
+      const waitMs = Math.min(2000, 1500 + delay);
+      console.log('[BLE] Waiting for native bridge to settle...', waitMs);
+      await sleep(waitMs);
+    } else {
+      console.log('[BLE] No active subscriptions to auto-unsubscribe for', id);
+    }
+
+    // 3. DISCONNECT THE PHYSICAL LINK
+
+    let connected = false;
+    try {
+      connected = await device.isConnected?.();
+    } catch {}
+    if (connected) {
+      try {
+        await device.cancelConnection();
+        console.log('[BLE] disconnected OK', id);
+      } catch (e) {
+        console.log('[BLE] cancelConnection err (ignore):', e.message);
+      }
+    }
+  } catch (e) {
+    console.log('[BLE] safeDisconnect err:', e?.message || String(e));
+  } finally {
+    const id = device?.id || device?.deviceID || 'unknown';
+    __disconnecting.delete(id);
+
+    for (const [key] of __activeSubs.entries()) {
+      if (key.includes(id)) {
+        __activeSubs.delete(key);
+      }
+    }
+  }
 }

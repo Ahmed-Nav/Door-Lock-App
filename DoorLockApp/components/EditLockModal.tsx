@@ -11,6 +11,7 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { updateLockName, deleteLock } from '../services/apiService';
+import Toast from 'react-native-toast-message';
 
 export default function EditLockModal() {
   const nav = useNavigation<any>();
@@ -24,10 +25,10 @@ export default function EditLockModal() {
     try {
       setBusy(true);
       await updateLockName(token, lockId, name.trim());
-      Alert.alert('Saved', 'Lock name updated.');
+      Toast.show({ type: 'success', text1: 'Saved!', text2: 'Lock name updated.' })
       nav.goBack();
     } catch (e: any) {
-      Alert.alert('Failed', String(e?.message || e));
+      Toast.show({ type: 'error', text1: 'Failed', text2: String(e?.message || e) })
     } finally {
       setBusy(false);
     }
@@ -46,13 +47,10 @@ export default function EditLockModal() {
             try {
               setBusy(true);
               await deleteLock(token, lockId);
-              Alert.alert('Deleted', `Lock #${lockId} removed.`);
+              Toast.show({ type: 'success', text1: 'Deleted', text2: `Lock #${lockId} removed.` })
               nav.goBack();
             } catch (e: any) {
-              Alert.alert(
-                'Delete failed',
-                String(e?.response?.data?.err || e?.message || e),
-              );
+              Toast.show({ type: 'error', text1: 'Delete failed', text2: String(e?.response?.data?.err || e?.message || e) })
             } finally {
               setBusy(false);
             }

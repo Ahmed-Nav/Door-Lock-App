@@ -22,6 +22,7 @@ import {
   listUsers,
   listLocks,
 } from '../services/apiService';
+import Toast from 'react-native-toast-message';
 
 export default function GroupDetail() {
   const { token } = useAuth();
@@ -101,24 +102,24 @@ export default function GroupDetail() {
 
   
   const doAddUser = async () => {
-    if (!selectedUser) return Alert.alert('Select a user first');
+    if (!selectedUser) return Toast.show({ type: 'info', text1: 'Select a user first' }) 
     try {
       await addUserToGroup(token, groupId, selectedUser);
       setSelectedUser(null);
       await load();
     } catch (e) {
-      Alert.alert('Add user failed', String(e?.response?.data?.err || e?.message || e));
+      Toast.show({ type: 'error', text1: 'Add user failed', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   };
 
   const doAssignLock = async () => {
-    if (!selectedLock) return Alert.alert('Select a lock first');
+    if (!selectedLock) return Toast.show({ type: 'info', text1: 'Select a lock first' }) 
     try {
       await assignLockToGroup(token, groupId, selectedLock);
       setSelectedLock(null);
       await load();
     } catch (e) {
-      Alert.alert('Assign lock failed', String(e?.response?.data?.err || e?.message || e));
+      Toast.show({ type: 'error', text1: 'Assign lock failed', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   };
 
@@ -127,7 +128,7 @@ export default function GroupDetail() {
       await removeUserFromGroup(token, groupId, userEmail);
       await load();
     } catch (e) {
-      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   };
 
@@ -136,7 +137,7 @@ export default function GroupDetail() {
       await unassignLockFromGroup(token, groupId, id);
       await load();
     } catch (e) {
-      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   };
 
@@ -151,7 +152,7 @@ export default function GroupDetail() {
             await deleteGroup(token, groupId);
             nav.goBack();
           } catch (e) {
-            Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+            Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
           }
         },
       },

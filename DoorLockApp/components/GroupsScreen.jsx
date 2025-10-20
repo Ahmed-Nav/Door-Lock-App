@@ -16,6 +16,7 @@ import {
   createGroup,
   rebuildAcl, 
 } from '../services/apiService';
+import Toast from 'react-native-toast-message';
 
 export default function GroupsScreen() {
   const { token, role } = useAuth();
@@ -33,7 +34,7 @@ export default function GroupsScreen() {
       const res = await listGroups(token);
       setGroups(res?.groups || []);
     } catch (e) {
-      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   }
 
@@ -48,10 +49,7 @@ export default function GroupsScreen() {
       setName('');
       await load();
     } catch (e) {
-      Alert.alert(
-        'Create failed',
-        String(e?.response?.data?.err || e?.message || e),
-      );
+      Toast.show({ type: 'error', text1: 'Create failed', text2: String(e?.response?.data?.err || e?.message || e) })
     }
   };
 
@@ -59,10 +57,7 @@ export default function GroupsScreen() {
   const onUpdateAccess = async () => {
     if (busy) return;
     if (!ctxLockId) {
-      Alert.alert(
-        'Pick a lock',
-        'Open this screen via “Manage Access” on a lock.',
-      );
+      Toast.show({ type: 'info', text1: 'Pick a lock', text2: 'Open this screen via “Manage Access” on a lock.' })
       return;
     }
     try {
@@ -73,10 +68,7 @@ export default function GroupsScreen() {
           const missingList = (res.missing || [])
             .map(m => m.email || m.id)
             .join('\n• ');
-          return Alert.alert(
-            'Missing device keys',
-            `Some users don’t have device keys yet:\n\n• ${missingList}`,
-          );
+          return Toast.show({ type: 'error', text1: 'Missing device keys', text2: `Some users don’t have device keys yet:\n\n• ${missingList}` })
         }
         throw new Error(res?.err || 'rebuild-failed');
       }
@@ -97,7 +89,7 @@ export default function GroupsScreen() {
         ],
       );
     } catch (e) {
-      Alert.alert('Error', String(e?.response?.data?.err || e?.message || e));
+      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     } finally {
       setBusy(false);
     }
