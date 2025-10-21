@@ -107,6 +107,7 @@ export default function GroupDetail() {
       await addUserToGroup(token, groupId, selectedUser);
       setSelectedUser(null);
       await load();
+      Toast.show({ type: 'success', text1: 'User Added', text2: `${selectedUser} has been added to the group.` });
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Add user failed', text2: String(e?.response?.data?.err || e?.message || e) })
     }
@@ -118,6 +119,7 @@ export default function GroupDetail() {
       await assignLockToGroup(token, groupId, selectedLock);
       setSelectedLock(null);
       await load();
+      Toast.show({ type: 'success', text1: 'Lock Assigned', text2: `Lock #${selectedLock} has been assigned to the group.` });
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Assign lock failed', text2: String(e?.response?.data?.err || e?.message || e) })
     }
@@ -127,6 +129,7 @@ export default function GroupDetail() {
     try {
       await removeUserFromGroup(token, groupId, userEmail);
       await load();
+      Toast.show({ type: 'success', text1: 'User Removed', text2: `${userEmail} has been removed from the group.` });
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     }
@@ -136,6 +139,7 @@ export default function GroupDetail() {
     try {
       await unassignLockFromGroup(token, groupId, id);
       await load();
+      Toast.show({ type: 'success', text1: 'Lock Unassigned', text2: `Lock #${id} has been unassigned.` });
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     }

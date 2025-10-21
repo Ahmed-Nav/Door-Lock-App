@@ -17,12 +17,15 @@ export const UUIDS = {
 const manager = new BleManager();
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+export { sleep };
 const __disconnecting = new Set();
 
 // GLOBAL MAP: Used to track all active subscriptions that need manual, crash-proof cleanup.
 const __activeSubs = new Map();
 // Track in-progress connect promises per device to avoid duplicate simultaneous connects
 const __connectPromises = new Map();
+// Conservative chunk size (Max MTU is 509, but 244 is safer)
+const MTU_PAYLOAD_SIZE = 500;
 
 function parseB64JsonOrNull(b64) {
   if (!b64) return null;
@@ -58,7 +61,7 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
           }
           if (!device) return;
 
-            try {
+          try {
             // Prevent concurrent connect attempts to the same device which can
             // cause native library races (BleAlreadyConnectedException / onError)
             async function connectOnce(id) {
@@ -77,7 +80,7 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
             const d = await connectOnce(device.id);
             await d.discoverAllServicesAndCharacteristics();
             try {
-              await d.requestMTU(185);
+              await d.requestMTU(512);
             } catch {}
             try {
               await d.requestConnectionPriority('high');
@@ -171,11 +174,10 @@ export async function sendOwnershipSet(
 }
 
 export async function sendAcl(device, envelope) {
-  // 1) Preflight on the phone (cheap, instant feedback)
+  // 1) Preflight checks (sigLen, user pub key format remain the same)
   const sigLen = Buffer.from(String(envelope?.sig || ''), 'base64').length;
   if (sigLen !== 64)
     throw new Error('ACL envelope sig must be 64 bytes (base64 r||s)');
-
   const users = envelope?.payload?.users || [];
   for (const u of users) {
     const pub = Buffer.from(String(u?.pub || ''), 'base64');
@@ -184,30 +186,100 @@ export async function sendAcl(device, envelope) {
         `User "${u?.kid || '?'}" pub must be 65 bytes uncompressed (0x04...)`,
       );
     }
-  } // 2) Prepare the base64 of the WHOLE JSON envelope
+  } // 2) Prepare the full Base64 payload
 
   const json = JSON.stringify(envelope);
-  let value = Buffer.from(json, 'utf8').toString('base64'); // 3) Belt & suspenders: remove any non-base64 chars (e.g. CR/LF/spaces)
+  let fullB64Value = Buffer.from(json, 'utf8').toString('base64');
+  fullB64Value = fullB64Value.replace(/[^A-Za-z0-9+/=]/g, '');
 
-  value = value.replace(/[^A-Za-z0-9+/=]/g, '');
+  const totalLength = fullB64Value.length;
+  let offset = 0;
+  let sequence = 0;
+
+  // Total number of chunks needed (rounded up)
+  const totalChunks = Math.ceil(totalLength / MTU_PAYLOAD_SIZE);
 
   const waiter = waitForCfgResult(device);
-  await sleep(150); // ensure CCCD for CFG_RESULT is armed
-  await device.writeCharacteristicWithResponseForService(
-    UUIDS.CFG_SERVICE,
-    UUIDS.CFG_ACL,
-    value,
+
+  console.log(
+    `[ACL_SEND] Total B64 length: ${totalLength} bytes. Chunks: ${totalChunks}`,
   );
-  await sleep(300);
+
+  await sleep(150); // Ensure CCCD for CFG_RESULT is armed
+
+  // 3) Fragmentation and Sequential Write Loop
+  while (offset < totalLength) {
+    const isStart = sequence === 0;
+    const isEnd = offset + MTU_PAYLOAD_SIZE >= totalLength;
+
+    // Determine the packet type based on position
+    let packetType;
+    if (isStart) {
+      packetType = 0x01; // START
+    } else if (isEnd) {
+      packetType = 0x03; // END
+    } else {
+      packetType = 0x02; // MIDDLE
+    }
+
+    // Extract the chunk data (maximum MTU_PAYLOAD_SIZE)
+    const chunkDataB64 = fullB64Value.substring(
+      offset,
+      offset + MTU_PAYLOAD_SIZE,
+    );
+    const chunkLength = Buffer.byteLength(chunkDataB64);
+
+    // Calculate buffer size: 1 (Type) + 4 (Length, for START only) + Chunk Data
+    let bufferSize = 1 + chunkLength;
+    if (isStart) {
+      bufferSize += 4;
+    }
+
+    const buffer = Buffer.alloc(bufferSize);
+    buffer.writeUInt8(packetType, 0); // Write Type (1 byte)
+
+    let payloadOffset = 1;
+
+    if (isStart) {
+      // Write Total Length (4 bytes, Little Endian for ESP32)
+      buffer.writeUInt32LE(totalLength, 1);
+      payloadOffset = 5;
+    }
+
+    // Write the actual B64 data chunk
+    buffer.write(chunkDataB64, payloadOffset, 'binary');
+
+    console.log(
+      `[ACL_SEND] Writing chunk ${
+        sequence + 1
+      }/${totalChunks} (Type: ${packetType}) - Length: ${chunkLength} B`,
+    );
+
+    // Send the buffer (BlePlx automatically handles the raw byte write)
+    await device.writeCharacteristicWithResponseForService(
+      UUIDS.CFG_SERVICE,
+      UUIDS.CFG_ACL,
+      buffer.toString('base64'), // Buffer must be sent as Base64 string in BlePlx
+    );
+
+    offset += MTU_PAYLOAD_SIZE;
+    sequence++;
+    await sleep(100); // Give the ESP32 a small delay to process the packet
+    if (isEnd) {
+      await sleep(300); // Wait for the final write response to settle before waiter runs
+    }
+  } // 4) Wait for final confirmation from the lock (CFG_RESULT notification)
+
   const res = await waiter;
+
   if (!res?.ok) {
     const friendly = {
       'bad-b64': 'Bad base64 payload',
-      'bad-json': 'Malformed JSON',
+      'fragment-len': 'Data size mismatch during reassembly.',
+      'fragment-start': 'Protocol error: missed start packet.',
+      'reassembly-read': 'Lock failed to read full file.',
       'bad-sig': 'Admin signature verification failed',
       'lid/ver': 'LockId mismatch or version not newer',
-      'bad-userpub':
-        'One or more user public keys invalid (must be 65B uncompressed)',
     };
     throw new Error(
       `ACL failed: ${friendly[res?.err] || res?.err || 'unknown'}`,
@@ -349,7 +421,9 @@ export async function safeDisconnect(device, { waitMs = 700 } = {}) {
     }
 
     if (toRemove.length) {
-      console.log(`[BLE] Auto-unsubscribing ${toRemove.length} monitors for ${id} (staggered)...`);
+      console.log(
+        `[BLE] Auto-unsubscribing ${toRemove.length} monitors for ${id} (staggered)...`,
+      );
       // Schedule staggered removal to avoid bursting native calls that trigger races
       let delay = 0;
       for (const key of toRemove) {
@@ -358,7 +432,9 @@ export async function safeDisconnect(device, { waitMs = 700 } = {}) {
         setTimeout(() => {
           try {
             if (sub && typeof sub.remove === 'function') {
-              console.log(`[BLE] Removing subscription ${key} (delayed=${delay}ms)`);
+              console.log(
+                `[BLE] Removing subscription ${key} (delayed=${delay}ms)`,
+              );
               sub.remove();
               console.log(`[BLE] Removed subscription ${key}`);
             } else {
@@ -367,7 +443,10 @@ export async function safeDisconnect(device, { waitMs = 700 } = {}) {
           } catch (e) {
             // Log and absorb native crashes as before but keep removal async
             console.log('--- NATIVE CRASH ABATED (delayed remove) ---');
-            console.log(`[BLE] sub.remove() caught FATAL error for ${key}:`, e?.message);
+            console.log(
+              `[BLE] sub.remove() caught FATAL error for ${key}:`,
+              e?.message,
+            );
             console.log('----------------------------');
           } finally {
             __activeSubs.delete(key);

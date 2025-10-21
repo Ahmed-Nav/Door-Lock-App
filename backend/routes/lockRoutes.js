@@ -20,7 +20,7 @@ router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
     if (!ownerId)
       return res.status(401).json({ ok: false, err: "unauthorized" });
 
-    const docs = await Lock.find({ ownerAccountId: req.userId, claimed: true })
+    const docs = await Lock.find({ claimed: true })
       .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
       .lean();
 
@@ -59,7 +59,7 @@ router.patch(
         updates.setupComplete = req.body.setupComplete;
 
       const doc = await Lock.findOneAndUpdate(
-        { lockId, ownerAccountId: req.userId },
+        { lockId },
         { $set: updates },
         { new: true }
       ).lean();
@@ -91,9 +91,6 @@ router.delete(
 
       const lock = await Lock.findOne({ lockId }).lean();
       if (!lock) return res.status(404).json({ ok: false, err: "not-found" });
-      if (lock.ownerAccountId !== req.userId) {
-        return res.status(403).json({ ok: false, err: "forbidden" });
-      }
 
       await Promise.all([
         AclVersion.deleteMany({ lockId }),

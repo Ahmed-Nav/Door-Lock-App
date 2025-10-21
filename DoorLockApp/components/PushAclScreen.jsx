@@ -20,7 +20,7 @@ import { useRoute } from '@react-navigation/native';
 
 import { useAuth } from '../auth/AuthContext';
 
-import { scanAndConnectForLockId, sendAcl, safeDisconnect } from '../ble/bleManager';
+import { scanAndConnectForLockId, sendAcl, safeDisconnect, sleep } from '../ble/bleManager';
 
 import { fetchLatestAcl } from '../services/apiService';
 
@@ -113,6 +113,7 @@ export default function PushAclScreen() {
   }, [ctxLockId, token, preEnvelope]);
 
   const push = async () => {
+    let device;
     try {
       if (role !== 'admin') {
         Toast.show({
@@ -168,11 +169,13 @@ export default function PushAclScreen() {
 
       await ensurePermissions();
 
-      const device = await scanAndConnectForLockId(Number(lockId));
+      device = await scanAndConnectForLockId(Number(lockId));
 
       setStatus('Sending ACL…');
 
       await sendAcl(device, envelope);
+
+      await sleep(2500);
 
       setStatus('ACL Sent');
 

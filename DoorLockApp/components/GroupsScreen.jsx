@@ -9,24 +9,20 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native'; 
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import {
-  listGroups,
-  createGroup,
-  rebuildAcl, 
-} from '../services/apiService';
+import { listGroups, createGroup, rebuildAcl } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 export default function GroupsScreen() {
   const { token, role } = useAuth();
   const nav = useNavigation();
   const route = useRoute();
-  const ctxLockId = route.params?.lockId ?? null; 
-  const ctxLockName = route.params?.lockName ?? null; 
+  const ctxLockId = route.params?.lockId ?? null;
+  const ctxLockName = route.params?.lockName ?? null;
   const [groups, setGroups] = useState([]);
   const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false); 
+  const [busy, setBusy] = useState(false);
 
   async function load() {
     try {
@@ -34,13 +30,19 @@ export default function GroupsScreen() {
       const res = await listGroups(token);
       setGroups(res?.groups || []);
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: String(e?.response?.data?.err || e?.message || e),
+      });
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]), 
+  );
 
   const onCreate = async () => {
     if (!name.trim()) return;
@@ -49,15 +51,22 @@ export default function GroupsScreen() {
       setName('');
       await load();
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Create failed', text2: String(e?.response?.data?.err || e?.message || e) })
+      Toast.show({
+        type: 'error',
+        text1: 'Create failed',
+        text2: String(e?.response?.data?.err || e?.message || e),
+      });
     }
   };
 
-  
   const onUpdateAccess = async () => {
     if (busy) return;
     if (!ctxLockId) {
-      Toast.show({ type: 'info', text1: 'Pick a lock', text2: 'Open this screen via “Manage Access” on a lock.' })
+      Toast.show({
+        type: 'info',
+        text1: 'Pick a lock',
+        text2: 'Open this screen via “Manage Access” on a lock.',
+      });
       return;
     }
     try {
@@ -68,7 +77,11 @@ export default function GroupsScreen() {
           const missingList = (res.missing || [])
             .map(m => m.email || m.id)
             .join('\n• ');
-          return Toast.show({ type: 'error', text1: 'Missing device keys', text2: `Some users don’t have device keys yet:\n\n• ${missingList}` })
+          return Toast.show({
+            type: 'error',
+            text1: 'Missing device keys',
+            text2: `Some users don’t have device keys yet:\n\n• ${missingList}`,
+          });
         }
         throw new Error(res?.err || 'rebuild-failed');
       }
@@ -82,14 +95,18 @@ export default function GroupsScreen() {
             onPress: () =>
               nav.navigate('PushAcl', {
                 lockId: Number(ctxLockId),
-                envelope: res.envelope, 
+                envelope: res.envelope,
               }),
           },
           { text: 'Close' },
         ],
       );
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: String(e?.response?.data?.err || e?.message || e),
+      });
     } finally {
       setBusy(false);
     }
@@ -99,7 +116,6 @@ export default function GroupsScreen() {
     <View style={s.c}>
       <Text style={s.t}>Groups</Text>
 
-      
       {ctxLockId ? (
         <Text style={{ color: '#bbb', marginBottom: 6 }}>
           Managing access for Lock #{ctxLockId}
@@ -107,7 +123,6 @@ export default function GroupsScreen() {
         </Text>
       ) : null}
 
-     
       {ctxLockId ? (
         <TouchableOpacity
           style={[s.btn, { backgroundColor: '#7B1FA2', marginBottom: 6 }]}
