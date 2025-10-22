@@ -25,11 +25,17 @@ import { signChallengeB64, getOrCreateDeviceKey } from '../lib/keys';
 import { Buffer } from 'buffer';
 
 import Toast from 'react-native-toast-message';
+import { useRoute } from '@react-navigation/native';
 
-const LOCK_ID = 101;
+
 
 export default function UnlockScreen() {
+
+  const route = useRoute();
+  const ctxLockId = route.params?.lockId ? String(route.params.lockId) : '101';
+
   const [status, setStatus] = useState('Idle');
+  const [lockId, setLockId] = useState(ctxLockId);
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -59,7 +65,7 @@ export default function UnlockScreen() {
 
       await ensurePerms();
 
-      device = await scanAndConnectForLockId(LOCK_ID);
+      device = await scanAndConnectForLockId(Number(lockId));
 
       const resultP = waitAuthResult(device);
 

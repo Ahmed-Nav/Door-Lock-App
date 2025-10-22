@@ -1,5 +1,5 @@
 // DoorLockApp/components/GroupsScreen.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { listGroups, createGroup, rebuildAcl } from '../services/apiService';
 import Toast from 'react-native-toast-message';
