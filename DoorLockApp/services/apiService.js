@@ -188,6 +188,11 @@ export async function deleteLock(token, lockId) {
   return res.data;
 }
 
+export const deleteUser = async (token, userId) => {
+  const r = await api.delete(`/users/${userId}`, auth(token));
+  return r.data; 
+};
+
 export async function patchLock(token, lockId, body) {
   const res = await api.patch(`/locks/${lockId}`, body, {
     headers: { Authorization: `Bearer ${token}` },

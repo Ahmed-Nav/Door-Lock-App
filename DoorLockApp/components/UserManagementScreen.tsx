@@ -1,7 +1,7 @@
 // DoorLockApp/components/UserManagementScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
-import { listUsers, updateUserRole } from '../services/apiService';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { listUsers, updateUserRole, deleteUser } from '../services/apiService';
 import { useAuth } from '../auth/AuthContext';
 import Toast from 'react-native-toast-message';
 
@@ -33,6 +33,30 @@ export default function UserManagementScreen() {
       console.error('updateUserRole failed:', err?.response?.data || err);
       Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update role.' })
     }
+  };
+
+  const handleDeleteUser = ( userId: string, userEmail: string ) => {
+    Alert.alert(
+      'Confirm User Deletion',
+      `Are you sure you want to permanently delete user: ${userEmail}? This action cannot be undone and will remove them from all groups/locks.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteUser(token, userId);
+              Toast.show({ type: "success", text1: "User Deleted", text2: `${userEmail} has been removed.` });
+              fetchUsers();
+            } catch(err: any) {
+              console.error("deleteUser failed:", err?.response?.data || err);
+              Toast.show({ type: "error", text1: "Error", text2: "Failed to delete user." });
+            }
+          },
+        },
+      ]
+    );
   };
 
   useEffect(() => {
@@ -67,6 +91,12 @@ export default function UserManagementScreen() {
           {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
         </Text>
       </TouchableOpacity>
+      <TouchableOpacity
+          style={[styles.btn, styles.deleteBtn]}
+          onPress={() => handleDeleteUser(item._id, item.email)}
+        >
+          <Text style={styles.btnText}>Delete User</Text>
+        </TouchableOpacity>
     )}
     </View>
   );
@@ -96,4 +126,17 @@ const styles = StyleSheet.create({
   role: { color: '#ccc', marginVertical: 6 },
   btn: { padding: 10, borderRadius: 8, alignItems: 'center' },
   btnText: { color: '#fff', fontWeight: '700' },
+  buttonRow: { 
+    flexDirection: 'row', 
+    marginTop: 10, 
+    justifyContent: 'space-between', 
+    gap: 8,
+  },
+  roleBtn: { 
+    flex: 2, 
+  }, 
+  deleteBtn: {
+    flex: 1, 
+    backgroundColor: '#8B0000', 
+  },
 });
