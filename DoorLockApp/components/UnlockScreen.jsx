@@ -26,11 +26,10 @@ import { Buffer } from 'buffer';
 
 import Toast from 'react-native-toast-message';
 import { useRoute } from '@react-navigation/native';
-
-
+import { useAuth } from '../auth/AuthContext';
 
 export default function UnlockScreen() {
-
+  const { role, signOut } = useAuth();
   const route = useRoute();
   const ctxLockId = route.params?.lockId ? String(route.params.lockId) : '101';
 
@@ -103,7 +102,6 @@ export default function UnlockScreen() {
         text1: 'Unlocked',
         text2: 'Door Unlocked Successfully',
       });
-
     } catch (e) {
       console.log('Unlock error:', e);
 
@@ -128,6 +126,11 @@ export default function UnlockScreen() {
       </TouchableOpacity>
 
       <Text style={s.status}>Status: {status}</Text>
+      {role === 'user' && ( 
+        <TouchableOpacity style={s.signOutBtn} onPress={signOut}>
+          <Text style={s.signOutTxt}>Sign Out</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -150,4 +153,16 @@ const s = StyleSheet.create({
   btxt: { color: 'white', fontWeight: '600' },
 
   status: { color: '#bbb', marginTop: 12 },
+
+  signOutBtn: { 
+    backgroundColor: '#8B0000',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  signOutTxt: {
+    color: 'white',
+    fontWeight: '600',
+  },
 });
