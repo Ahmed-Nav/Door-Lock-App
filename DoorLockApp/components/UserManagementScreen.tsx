@@ -80,7 +80,8 @@ export default function UserManagementScreen() {
       <Text style={styles.email}>{item.email}</Text>
       <Text style={styles.role}>Role: {item.role}</Text>
       {item.email !== currentEmail && (
-      <TouchableOpacity
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
         style={[
           styles.btn,
           { backgroundColor: item.role === 'admin' ? '#b23b3b' : '#3b82f6' },
@@ -97,6 +98,7 @@ export default function UserManagementScreen() {
         >
           <Text style={styles.btnText}>Delete User</Text>
         </TouchableOpacity>
+      </View>
     )}
     </View>
   );
