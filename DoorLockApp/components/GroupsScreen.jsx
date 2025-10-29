@@ -5,10 +5,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   FlatList,
   Modal, 
-  TouchableWithoutFeedback, 
+  TouchableWithoutFeedback,
+  Platform,
+  PermissionsAndroid,
+  ActivityIndicator 
 } from 'react-native';
 import {
   useNavigation,
@@ -16,8 +18,9 @@ import {
   useFocusEffect,
 } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { listGroups, createGroup, rebuildAcl } from '../services/apiService';
+import { listGroups, createGroup, rebuildAcl, fetchLatestAcl } from '../services/apiService';
 import Toast from 'react-native-toast-message';
+import { scanAndConnectForLockId, sendAcl, safeDisconnect } from '../ble/bleManager';
 
 
 const useDebounce = (callback, delay) => {
@@ -93,7 +96,9 @@ export default function GroupsScreen() {
   const [searchTerm, setSearchTerm] = useState(''); 
   const [isModalVisible, setIsModalVisible] = useState(false); 
   const [name, setName] = useState(''); 
-  const [busy, setBusy] = useState(false); 
+  const [busy, setBusy] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState('');
+
   const load = useCallback(async () => {
     try {
       if (role !== 'admin') return;
@@ -178,56 +183,84 @@ export default function GroupsScreen() {
     }
   };
 
-  const onUpdateAccess = async () => {
-    if (busy) return;
-    if (!ctxLockId) {
-      Toast.show({
-        type: 'info',
-        text1: 'Pick a lock',
-        text2: 'Open this screen via “Manage Access” on a lock.',
-      });
-      return;
+  async function ensurePermissions() {
+    if (Platform.OS !== 'android') return;
+    const perms = [
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+    ];
+    if (Platform.Version < 31) {
+      perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
     }
+    for (const p of perms) {
+      const g = await PermissionsAndroid.request(p);
+      if (g !== PermissionsAndroid.RESULTS.GRANTED) {
+        throw new Error(`Missing permission: ${p}`);
+      }
+    }
+  }
+
+  const onUpdateAccess = async () => {
+    let device; 
     try {
+      if (busy) return;
+      if (!ctxLockId) {
+        Toast.show({ type: 'info', text1: 'Pick a lock first' });
+        return;
+      }
       setBusy(true);
-      const res = await rebuildAcl(token, Number(ctxLockId));
-      if (!res?.ok) {
-        if (res?.err === 'missing-userpubs') {
-          const missingList = (res.missing || [])
+
+      setUpdateStatus('Building new ACL...');
+      const rebuildRes = await rebuildAcl(token, Number(ctxLockId));
+      if (!rebuildRes?.ok) {
+        if (rebuildRes?.err === 'missing-userpubs') {
+          const missingList = (rebuildRes.missing || [])
             .map(m => m.email || m.id)
             .join('\n• ');
-          return Toast.show({
+          Toast.show({
             type: 'error',
             text1: 'Missing device keys',
             text2: `Some users don’t have device keys yet:\n\n• ${missingList}`,
+            visibilityTime: 10000, 
           });
+          throw new Error('missing-userpubs'); 
         }
-        throw new Error(res?.err || 'rebuild-failed');
+        throw new Error(rebuildRes?.err || 'rebuild-failed');
       }
 
-      Alert.alert(
-        'Access updated',
-        `ACL v${res.envelope?.payload?.version} built for Lock #${ctxLockId}.`,
-        [
-          {
-            text: 'Send to Lock',
-            onPress: () =>
-              nav.navigate('PushAcl', {
-                lockId: Number(ctxLockId),
-                envelope: res.envelope,
-              }),
-          },
-          { text: 'Close' },
-        ],
-      );
-    } catch (e) {
+      setUpdateStatus('Fetching new ACL...');
+      const data = await fetchLatestAcl(token, Number(ctxLockId));
+      if (!data?.ok || !data?.envelope) {
+        throw new Error('Failed to fetch new ACL envelope from server.');
+      }
+
+      setUpdateStatus('Requesting permissions...');
+      await ensurePermissions();
+
+      setUpdateStatus('Scanning for lock...');
+      device = await scanAndConnectForLockId(Number(ctxLockId));
+
+      setUpdateStatus('Sending ACL to lock...');
+      await sendAcl(device, data.envelope);
+
+      setUpdateStatus(''); 
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: String(e?.response?.data?.err || e?.message || e),
+        type: 'success',
+        text1: 'Success',
+        text2: 'Access list updated on lock.',
       });
+    } catch (e) {
+      if (e.message !== 'missing-userpubs') {
+        Toast.show({
+          type: 'error',
+          text1: 'Update Failed',
+          text2: String(e?.response?.data?.err || e?.message || e),
+        });
+      }
+      setUpdateStatus('Failed'); 
     } finally {
       setBusy(false);
+        await safeDisconnect(device);
     }
   };
 
@@ -378,5 +411,15 @@ const s = StyleSheet.create({
   },
   confirmBtn: {
     backgroundColor: '#7B1FA2',
+  },
+  busyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  btBusy: { 
+    color: 'white',
+    fontWeight: '600',
   },
 });
