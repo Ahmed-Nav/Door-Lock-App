@@ -7,7 +7,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Platform,
   PermissionsAndroid,
 } from 'react-native';
@@ -57,6 +56,11 @@ export default function UnlockScreen() {
   }
 
   const go = async () => {
+    if (!lockId) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'No Lock ID provided.' });
+      setStatus('Error');
+      return;
+    }
     let device;
 
     try {

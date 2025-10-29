@@ -160,6 +160,11 @@ export const listLocks = async token => {
   return r.data; 
 };
 
+export const fetchMyLocks = async token => {
+  const r = await api.get('/locks/my', auth(token));
+  return r.data; 
+};
+
 export async function updateLockName(token, lockId, name) {
   const r = await api.patch(
     `/locks/${lockId}`,

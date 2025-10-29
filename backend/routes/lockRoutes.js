@@ -77,6 +77,45 @@ router.patch(
   }
 );
 
+router.get('/locks/my', verifyClerkOidc, async (req, res) => {
+  try {
+    await connectDB();
+
+    const userId = req.userId; 
+    if (!userId) {
+      return res.status(401).json({ ok: false, err: 'unauthorized' });
+    }
+
+    const userGroups = await Group.find({ userIds: userId }).lean();
+
+    const myLockIds = new Set();
+    for (const group of userGroups) {
+      group.lockIds.forEach(id => myLockIds.add(id));
+    }
+    const lockIdArray = Array.from(myLockIds);
+
+    const docs = await Lock.find({
+      lockId: { $in: lockIdArray },
+      claimed: true,
+    })
+      .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
+      .lean();
+
+    const locks = (docs || []).map((d) => ({
+      lockId: d.lockId,
+      name: d.name || `Lock #${d.lockId}`,
+      claimed: !!d.claimed,
+      setupComplete: !!d.setupComplete,
+    }));
+
+    return res.json({ ok: true, locks });
+
+  } catch (e) {
+    console.error('GET /api/locks/my failed:', e?.stack || e);
+    return res.status(500).json({ ok: false, err: 'server-error' });
+  }
+});
+
 
 router.delete(
   "/locks/:lockId",

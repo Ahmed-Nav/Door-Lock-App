@@ -6,11 +6,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { updateLockName, deleteLock } from '../services/apiService';
+import { updateLockName } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 export default function EditLockModal() {
@@ -25,39 +24,21 @@ export default function EditLockModal() {
     try {
       setBusy(true);
       await updateLockName(token, lockId, name.trim());
-      Toast.show({ type: 'success', text1: 'Saved!', text2: 'Lock name updated.' })
+      Toast.show({
+        type: 'success',
+        text1: 'Saved!',
+        text2: 'Lock name updated.',
+      });
       nav.goBack();
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: String(e?.message || e) })
+      Toast.show({
+        type: 'error',
+        text1: 'Failed',
+        text2: String(e?.message || e),
+      });
     } finally {
       setBusy(false);
     }
-  };
-
-  const del = async () => {
-    Alert.alert(
-      'Delete Lock',
-      `Delete lock #${lockId}? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setBusy(true);
-              await deleteLock(token, lockId);
-              Toast.show({ type: 'success', text1: 'Deleted', text2: `Lock #${lockId} removed.` })
-              nav.goBack();
-            } catch (e: any) {
-              Toast.show({ type: 'error', text1: 'Delete failed', text2: String(e?.response?.data?.err || e?.message || e) })
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
   };
 
   return (
@@ -66,13 +47,6 @@ export default function EditLockModal() {
       <TextInput style={s.in} value={name} onChangeText={setName} />
       <TouchableOpacity onPress={save} disabled={busy} style={s.btn}>
         <Text style={s.bt}>{busy ? 'Saving…' : 'Save'}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={del}
-        disabled={busy}
-        style={[s.btn, { backgroundColor: '#b23b3b' }]}
-      >
-        <Text style={s.bt}>{busy ? '...' : 'Delete Lock'}</Text>
       </TouchableOpacity>
     </View>
   );

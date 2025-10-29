@@ -1,255 +1,246 @@
-// DoorLockApp/components/ClaimLockScreen.jsx
-
 import React, { useState, useEffect } from 'react';
-
 import {
-
   View,
-
   Text,
-
   TextInput,
-
   TouchableOpacity,
-
   StyleSheet,
-
-  Alert,
-
+  ScrollView,
 } from 'react-native';
-
 import Toast from 'react-native-toast-message';
-
 import { useAuth } from '../auth/AuthContext';
-
 import { useRoute, useNavigation } from '@react-navigation/native';
-
 import { claimLockOnServer } from '../services/apiService';
-
 import { getOrCreateDeviceKey, saveClaimContext } from '../lib/keys';
 
-
-
 export default function ClaimLockScreen() {
-
   const { token, role, email } = useAuth();
-
   const route = useRoute();
-
   const navigation = useNavigation();
 
-
-
-  const [lockId, setLockId] = useState('');
-
-  const [claimCode, setClaimCode] = useState('');
-
+  const [claimMode, setClaimMode] = useState(null);
   const [status, setStatus] = useState('Idle');
 
+  const [manualLockId, setManualLockId] = useState('');
+  const [manualClaimCode, setManualClaimCode] = useState('');
 
-
- 
-
- 
+  const [scannedData, setScannedData] = useState(null);
 
   useEffect(() => {
-
     const p = route?.params || {};
-
-    if (p?.lockId) setLockId(String(p.lockId));
-
-    if (p?.claimCode) setClaimCode(String(p.claimCode));
-
+    if (p?.lockId && p?.claimCode) {
+      setScannedData({
+        lockId: String(p.lockId),
+        claimCode: String(p.claimCode),
+      });
+      setClaimMode('scan');
+      setStatus('Scanned. Press Claim to continue.');
+    }
   }, [route?.params]);
 
-
-
   const doClaim = async () => {
+    const isScanMode = claimMode === 'scan' && scannedData;
+
+    const lockIdToClaim = isScanMode ? scannedData.lockId : manualLockId;
+    const claimCodeToClaim = isScanMode
+      ? scannedData.claimCode
+      : manualClaimCode;
+
+    if (!lockIdToClaim || !claimCodeToClaim) {
+      Toast.show({ type: 'error', text1: 'Missing fields' });
+      return;
+    }
 
     try {
-
       if (role !== 'admin') {
-
-        Toast.show({ type: 'error', text1: 'Forbidden', text2: 'Only Admins can push ACLs.' })
-
+        Toast.show({
+          type: 'error',
+          text1: 'Forbidden',
+          text2: 'Only Admins can claim locks.',
+        });
         return;
-
       }
-
       setStatus('Claiming on server…');
-
       const { pubB64, kid } = await getOrCreateDeviceKey();
-
       const res = await claimLockOnServer(token, {
-
-        lockId: Number(lockId),
-
-        claimCode,
-
-        kid
-
+        lockId: Number(lockIdToClaim),
+        claimCode: claimCodeToClaim.trim(),
+        kid,
       });
 
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
 
       setStatus('Claimed');
-
-      Toast.show({ type: 'success', text1: 'Claimed', text2: `Lock ${lockId} claimed on server.` })
+      Toast.show({
+        type: 'success',
+        text1: 'Claimed',
+        text2: `Lock ${lockIdToClaim} claimed on server.`,
+      });
 
       await saveClaimContext({
-
-        lockId: Number(lockId),
-
-        claimCode: claimCode.trim(),
-
+        lockId: Number(lockIdToClaim),
+        claimCode: claimCodeToClaim.trim(),
         adminPubB64: res.adminPubB64,
-
       });
 
       navigation.replace('Ownership', {
-
-        lockId: Number(lockId),
-
-        claimCode: claimCode.trim(),
-
+        lockId: Number(lockIdToClaim),
+        claimCode: claimCodeToClaim.trim(),
       });
-
     } catch (e) {
-
       setStatus('Claim Failed');
-
       const err = e?.response?.data?.err || e?.message;
-
       if (err === 'already-claimed')
-
-        Toast.show({ type: 'error', text1: 'Already claimed', text2: 'This lock has already been claimed.' })
-
+        Toast.show({
+          type: 'error',
+          text1: 'Already claimed',
+          text2: 'This lock has already been claimed.',
+        });
       else if (err === 'bad-claim')
-
-        Toast.show({ type: 'error', text1: 'Invalid code', text2: 'The claim code is incorrect.' })
-
-      else Toast.show({ type: 'error', text1: 'Claim failed', text2: String(err) })
-
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid code',
+          text2: 'The claim code is incorrect.',
+        });
+      else
+        Toast.show({
+          type: 'error',
+          text1: 'Claim failed',
+          text2: String(err),
+        });
     }
-
   };
 
+  const renderClaimForm = () => {
+    const isScanMode = claimMode === 'scan' && scannedData;
 
+    return (
+      <>
+        <TextInput
+          style={[s.in, !isScanMode && s.editableInput]}
+          placeholder="Lock ID"
+          keyboardType="numeric"
+          value={isScanMode ? scannedData.lockId : manualLockId}
+          onChangeText={setManualLockId}
+          placeholderTextColor="#888"
+          editable={!isScanMode}
+        />
+        <TextInput
+          style={[s.in, !isScanMode && s.editableInput]}
+          placeholder="Claim Code"
+          value={isScanMode ? scannedData.claimCode : manualClaimCode}
+          onChangeText={setManualClaimCode}
+          placeholderTextColor="#888"
+          editable={!isScanMode}
+        />
+
+        <TouchableOpacity style={s.btn} onPress={doClaim}>
+          <Text style={s.bt}>Claim This Lock</Text>
+        </TouchableOpacity>
+      </>
+    );
+  };
 
   return (
-
-    <View style={s.c}>
-
+    <ScrollView style={s.c}>
       <Text style={s.t}>Claim a lock</Text>
-
       <Text style={s.label}>
-
         {email ? `Signed in as ${email} (${role})` : 'Not signed in'}
-
       </Text>
 
+      {/* MODE 1: Initial Choice */}
+      {claimMode === null && (
+        <View style={s.choiceContainer}>
+          <TouchableOpacity
+            style={[s.btn, { backgroundColor: '#7B1FA2' }]}
+            onPress={() => navigation.navigate('ClaimQr')}
+          >
+            <Text style={s.bt}>Scan to Claim</Text>
+          </TouchableOpacity>
 
+          <TouchableOpacity
+            style={s.btn}
+            onPress={() => setClaimMode('manual')}
+          >
+            <Text style={s.bt}>Enter Manually</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-     
+      {/* MODE 2: Manual Entry */}
+      {claimMode === 'manual' && (
+        <>
+          <Text style={s.subtitle}>Enter Lock Details Manually</Text>
+          {renderClaimForm()}
+          <TouchableOpacity
+            style={[s.btn, s.btnGhost]}
+            onPress={() => setClaimMode(null)}
+          >
+            <Text style={s.btGhost}>Cancel</Text>
+          </TouchableOpacity>
+        </>
+      )}
 
-      <TouchableOpacity
-
-        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
-
-        onPress={() => navigation.navigate('ClaimQr')}
-
-      >
-
-        <Text style={s.bt}>Scan QR</Text>
-
-      </TouchableOpacity>
-
-
-
-      <TextInput
-
-        style={s.in}
-
-        placeholder="Lock ID"
-
-        keyboardType="numeric"
-
-        value={lockId}
-
-        onChangeText={setLockId}
-
-        placeholderTextColor="#888"
-
-      />
-
-      <TextInput
-
-        style={s.in}
-
-        placeholder="Claim Code"
-
-        value={claimCode}
-
-        onChangeText={setClaimCode}
-
-        placeholderTextColor="#888"
-
-      />
-
-
-
-      <TouchableOpacity style={s.btn} onPress={doClaim}>
-
-        <Text style={s.bt}>Claim</Text>
-
-      </TouchableOpacity>
-
-
+      {/* MODE 3: Scanned Data */}
+      {claimMode === 'scan' && (
+        <>
+          <Text style={s.subtitle}>Confirm Scanned Details</Text>
+          {renderClaimForm()}
+          <TouchableOpacity
+            style={[s.btn, s.btnGhost]}
+            onPress={() => navigation.navigate('ClaimQr')}
+          >
+            <Text style={s.btGhost}>Scan a Different Code</Text>
+          </TouchableOpacity>
+        </>
+      )}
 
       <Text style={s.status}>Status: {status}</Text>
-
-    </View>
-
+    </ScrollView>
   );
-
 }
 
-
-
 const s = StyleSheet.create({
-
-  c: { flex: 1, padding: 16, gap: 12, backgroundColor: '#0b0b0f' },
-
+  c: { flex: 1, padding: 16, backgroundColor: '#0b0b0f' },
   t: { color: 'white', fontSize: 20, fontWeight: '700' },
-
-  label: { color: 'white' },
-
-  in: {
-
-    backgroundColor: '#1d1d25',
-
+  subtitle: {
     color: 'white',
-
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  label: { color: 'white', marginBottom: 20 },
+  choiceContainer: {
+    marginTop: 20,
+    gap: 12,
+  },
+  in: {
+    backgroundColor: '#333', // Darker for non-editable
+    color: '#999',
     borderRadius: 10,
-
     padding: 12,
-
+    fontSize: 16,
+    marginBottom: 12,
   },
-
+  editableInput: {
+    backgroundColor: '#1d1d25',
+    color: 'white',
+  },
   btn: {
-
     backgroundColor: '#444',
-
     padding: 14,
-
     borderRadius: 10,
-
     alignItems: 'center',
-
+    marginBottom: 12,
   },
-
-  bt: { color: 'white', fontWeight: '600' },
-
-  status: { color: '#bbb', marginTop: 12 },
-
+  bt: { color: 'white', fontWeight: '600', fontSize: 16 },
+  btnGhost: {
+    backgroundColor: 'transparent',
+    borderColor: '#444',
+    borderWidth: 1,
+  },
+  btGhost: { color: '#888', fontWeight: '600', fontSize: 16 },
+  status: { color: '#bbb', marginTop: 12, textAlign: 'center' },
 });
