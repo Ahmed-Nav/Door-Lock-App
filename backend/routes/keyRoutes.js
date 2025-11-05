@@ -1,71 +1,78 @@
 const router = require("express").Router();
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
-const verifyClerkOidc  = require("../middleware/verifyClerkOidc");
-
-const limiter = rateLimit({ windowMs: 60_000, max: 120 });
+const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { connectDB } = require("../services/db");
 const UserKey = require("../models/UserKey");
-const { requireString, bad } = require("../middleware/validate");
+const { requireString } = require("../middleware/validate");
 
 const kidOf = (pubB64) =>
   crypto.createHash("sha256").update(pubB64, "utf8").digest("hex").slice(0, 16);
 
+router.post(
+  "/keys/register",
+  rateLimit({ windowMs: 60_000, max: 120 }),
+  verifyClerkOidc,
+  async (req, res, next) => {
+    try {
+      await connectDB();
 
-router.post("/keys/register", limiter, verifyClerkOidc, async (req, res) => {
-  try {
+      const pubB64 = requireString(req.body?.pubB64, "pubB64", {
+        min: 80,
+        max: 200,
+      });
+      const label =
+        typeof req.body?.label === "string" ? req.body.label.slice(0, 64) : "";
 
-    await connectDB();
+      if (!pubB64 || pubB64.length < 80) {
+        return res.status(400).json({ ok: false, err: "bad-pub-format" });
+      }
 
-    const pubB64 = requireString(req.body?.pubB64, "pubB64", {
-      min: 80,
-      max: 200,
-    });
-    const label =
-      typeof req.body?.label === "string" ? req.body.label.slice(0, 64) : "";
-    if (!pubB64) return res.status(400).json({ ok: false, err: "missing-pub" });
+      const mongoUserId = req.userId;
+      const kid = kidOf(pubB64);
 
-    if (pubB64.length < 80) {
-      return res.status(400).json({ ok: false, err: "bad-pub-format" });
+      const existing = await UserKey.findOne({ kid }).lean();
+
+      if (existing && existing.userId.toString() !== mongoUserId.toString()) {
+        return res
+          .status(409)
+          .json({ ok: false, err: "kid-owned-by-other-user" });
+      }
+      if (
+        existing &&
+        existing.userId.toString() === mongoUserId.toString() &&
+        existing.active
+      ) {
+        return res.json({ ok: true, kid: existing.kid });
+      }
+
+      await UserKey.updateMany(
+        { userId: mongoUserId },
+        { $set: { active: false } }
+      );
+
+      const doc = await UserKey.findOneAndUpdate(
+        { kid },
+        {
+          userId: mongoUserId, 
+          pubB64,
+          label,
+          active: true,
+          updatedAt: new Date(),
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      res.json({ ok: true, kid: doc.kid });
+    } catch (e) {
+      if (e?.code === 11000) {
+        e.status = 409;
+        e.code = "CLAIM_CONFLICT";
+      }
+      return next(e);
     }
-
-    const kid = kidOf(pubB64);
-
-    const existing = await UserKey.findOne({ kid }).lean();
-    if (existing && existing.userId !== req.userId) {
-      return res
-        .status(409)
-        .json({ ok: false, err: "kid-owned-by-other-user" });
-    }
-    if (existing && existing.userId === req.userId && existing.active) {
-      return res.json({ ok: true, kid: existing.kid });
-    }
-
-    await UserKey.updateMany(
-      { userId: req.userId },
-      { $set: { active: false } }
-    );
-
-    // Then insert or update the new key
-    const doc = await UserKey.findOneAndUpdate(
-      { kid },
-      {
-        userId: req.userId,
-        pubB64,
-        label,
-        active: true,
-        updatedAt: new Date(),
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    res.json({ ok: true, kid: doc.kid });
-  } catch (e) {
-    if (e?.code === 11000) { e.status = 409; e.code = "CLAIM_CONFLICT"; }
-    return next(e);
   }
-});
-
+);
 
 router.get("/keys/mine", verifyClerkOidc, async (req, res) => {
   const items = await UserKey.find({ userId: req.userId, active: true })
@@ -74,8 +81,8 @@ router.get("/keys/mine", verifyClerkOidc, async (req, res) => {
   res.json({ ok: true, items });
 });
 
-
 router.delete("/keys/:kid", verifyClerkOidc, async (req, res) => {
+
   await UserKey.updateOne(
     { userId: req.userId, kid: req.params.kid },
     { active: false }

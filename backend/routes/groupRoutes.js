@@ -1,86 +1,100 @@
 // backend/routes/groupRoutes.js
-const router = require("express").Router();
-const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/requireRole");
+const express = require("express");
+const router = express.Router();
+const { connectDB } = require("../services/db");
 const Group = require("../models/Group");
-const User = require("../models/User");
+const User = require("../models/User"); 
+const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 
-router.use("/groups", verifyClerkOidc);
+const {
+  requireAdmin,
+  requireUser,
+} = require("../middleware/requireRoleInWorkspace");
+const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 
-// ---------- create/list ----------
-router.post("/groups", requireAdmin, async (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  if (!name) return res.status(400).json({ ok: false, err: "bad-name" });
-  const g = await Group.create({ name, userIds: [], lockIds: [] });
-  res.json({ ok: true, group: g });
-});
+router.get(
+  "/",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireUser, 
+  async (req, res) => {
+    try {
+      await connectDB();
+      const groups = await Group.find({
+        workspace_id: req.workspaceId,
+      }).lean();
 
-router.get("/groups", requireAdmin, async (_req, res) => {
-  const gs = await Group.find().lean();
-  // include counts
-  const withCounts = await Promise.all(
-    gs.map(async (g) => ({
-      ...g,
-      userCount: g.userIds?.length || 0,
-      lockCount: g.lockIds?.length || 0,
-    }))
-  );
-  res.json({ ok: true, groups: withCounts });
-});
+      res.json({ ok: true, groups });
+    } catch (e) {
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
 
-// ---------- details (emails expanded) ----------
-router.get("/groups/:id", requireAdmin, async (req, res) => {
-  const id = req.params.id;
-  const g = await Group.findById(id).lean();
-  if (!g) return res.status(404).json({ ok: false, err: "not-found" });
+router.post(
+  "/",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireAdmin, 
+  async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name) {
+        return res.status(400).json({ ok: false, err: "name-required" });
+      }
 
-  const users = await User.find(
-    { _id: { $in: g.userIds || [] } },
-    { email: 1 }
-  ).lean();
-  res.json({
-    ok: true,
-    group: {
-      _id: g._id,
-      name: g.name,
-      lockIds: g.lockIds || [],
-      users: users.map((u) => ({ id: u._id.toString(), email: u.email })),
-    },
-  });
-});
+      await connectDB();
 
-// ---------- add/remove user ----------
-router.post("/groups/:id/users", requireAdmin, async (req, res) => {
-  const id = req.params.id;
-  const { userEmail, remove } = req.body || {};
-  const u = await User.findOne({ email: userEmail });
-  if (!u) return res.status(404).json({ ok: false, err: "user-not-found" });
+      const newGroup = await Group.create({
+        name: name,
+        workspace_id: req.workspaceId,
+        userIds: [],
+        lockIds: [],
+      });
 
-  const op = remove
-    ? { $pull: { userIds: u._id } }
-    : { $addToSet: { userIds: u._id } };
-  await Group.updateOne({ _id: id }, op);
-  res.json({ ok: true });
-});
+      res.status(201).json({ ok: true, group: newGroup });
+    } catch (e) {
+      if (e.code === 11000) {
+        // Mongo duplicate key error
+        return res.status(409).json({ ok: false, err: "group-name-taken" });
+      }
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
 
-// ---------- assign/unassign lock ----------
-router.post("/groups/:id/locks", requireAdmin, async (req, res) => {
-  const id = req.params.id;
-  const { lockId, remove } = req.body || {};
-  if (!lockId) return res.status(400).json({ ok: false, err: "bad-lockId" });
 
-  const op = remove
-    ? { $pull: { lockIds: Number(lockId) } }
-    : { $addToSet: { lockIds: Number(lockId) } };
-  await Group.updateOne({ _id: id }, op);
-  res.json({ ok: true });
-});
+router.post(
+  "/:groupId/users",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { userEmail } = req.body;
+      await connectDB();
 
-// ---------- delete group ----------
-router.delete("/groups/:id", requireAdmin, async (req, res) => {
-  const id = req.params.id;
-  await Group.deleteOne({ _id: id });
-  res.json({ ok: true });
-});
+      const userToAdd = await User.findOne({ email: userEmail }).lean();
+      if (!userToAdd) {
+        return res.status(404).json({ ok: false, err: "user-not-found" });
+      }
+
+      const group = await Group.findOneAndUpdate(
+        { _id: req.params.groupId, workspace_id: req.workspaceId },
+        { $addToSet: { userIds: userToAdd._id } } 
+      );
+
+      if (!group) {
+        return res
+          .status(404)
+          .json({ ok: false, err: "group-not-found-in-workspace" });
+      }
+
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
 
 module.exports = router;

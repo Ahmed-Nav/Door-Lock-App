@@ -4,7 +4,21 @@ const UserSchema = new mongoose.Schema(
   {
     clerkId: { type: String, index: true, unique: true },
     email: { type: String, index: true },
-    role: { type: String, enum: ["admin", "user"], default: "user" },
+    workspaces: [
+      {
+        _id: false,
+        workspace_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Workspace",
+          required: true,
+        },
+        role: {
+          type: String,
+          enum: ["owner", "admin", "user"],
+          required: true,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );
