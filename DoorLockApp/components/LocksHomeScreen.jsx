@@ -256,7 +256,11 @@ export default function LocksHomeScreen() {
       <Text style={s.title}>My Locks</Text>
 
       {locks.length === 0 && !loading ? (
-        <Text style={s.empty}>No locks yet. Tap + to claim one.</Text>
+        <Text style={s.empty}>
+          {role === 'admin'
+            ? 'No locks yet. Tap + to claim one.'
+            : 'You have not been given access to any locks.'}
+        </Text>
       ) : (
         <FlatList
           data={locks}
@@ -266,9 +270,11 @@ export default function LocksHomeScreen() {
         />
       )}
 
-      <TouchableOpacity style={s.fab} onPress={goClaim}>
-        <Text style={s.fabTxt}>＋</Text>
-      </TouchableOpacity>
+      {role === 'admin' && (
+        <TouchableOpacity style={s.fab} onPress={goClaim}>
+          <Text style={s.fabTxt}>＋</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

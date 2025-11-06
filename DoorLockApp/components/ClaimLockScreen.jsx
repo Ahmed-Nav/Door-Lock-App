@@ -148,7 +148,6 @@ export default function ClaimLockScreen() {
         {email ? `Signed in as ${email} (${role})` : 'Not signed in'}
       </Text>
 
-      {/* MODE 1: Initial Choice */}
       {claimMode === null && (
         <View style={s.choiceContainer}>
           <TouchableOpacity
@@ -167,7 +166,6 @@ export default function ClaimLockScreen() {
         </View>
       )}
 
-      {/* MODE 2: Manual Entry */}
       {claimMode === 'manual' && (
         <>
           <Text style={s.subtitle}>Enter Lock Details Manually</Text>
@@ -181,7 +179,6 @@ export default function ClaimLockScreen() {
         </>
       )}
 
-      {/* MODE 3: Scanned Data */}
       {claimMode === 'scan' && (
         <>
           <Text style={s.subtitle}>Confirm Scanned Details</Text>
@@ -217,7 +214,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
   in: {
-    backgroundColor: '#333', // Darker for non-editable
+    backgroundColor: '#333', 
     color: '#999',
     borderRadius: 10,
     padding: 12,

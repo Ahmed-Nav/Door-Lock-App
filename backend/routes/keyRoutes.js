@@ -37,6 +37,9 @@ router.post("/keys/register", limiter, verifyClerkOidc, async (req, res) => {
         .status(409)
         .json({ ok: false, err: "kid-owned-by-other-user" });
     }
+    if (existing && existing.userId === req.userId && existing.active) {
+      return res.json({ ok: true, kid: existing.kid });
+    }
 
     await UserKey.updateMany(
       { userId: req.userId },

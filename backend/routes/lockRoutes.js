@@ -81,7 +81,7 @@ router.get('/locks/my', verifyClerkOidc, async (req, res) => {
   try {
     await connectDB();
 
-    const userId = req.userId; 
+    const userId = req.dbUser?._id;
     if (!userId) {
       return res.status(401).json({ ok: false, err: 'unauthorized' });
     }
