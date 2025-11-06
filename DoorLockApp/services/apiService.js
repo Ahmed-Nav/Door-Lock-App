@@ -258,3 +258,21 @@ export const deleteUser = async (token, workspaceId, userId) => {
   );
   return r.data;
 };
+
+export const inviteUser = async (token, workspaceId, email, role) => {
+  const r = await api.post(
+    '/invite',
+    { email, role },
+    authWorkspace(token, workspaceId),
+  );
+  return r.data;
+};
+
+export const acceptInvite = async (token, inviteToken) => {
+  const r = await api.post(
+    '/invite/accept',
+    { inviteToken },
+    auth(token), // This uses the new user's token
+  );
+  return r.data;
+};

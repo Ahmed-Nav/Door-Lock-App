@@ -34,7 +34,7 @@ type AuthState = {
   role: WorkspaceRole | null;
   email: string | null;
   loading: boolean;
-  signIn: () => Promise<void>;
+  signIn: (token?: string) => Promise<void>;
   signOut: () => Promise<void>;
   switchWorkspace: (workspaceId: string) => Promise<void>;
 };

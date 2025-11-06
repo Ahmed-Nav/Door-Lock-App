@@ -17,6 +17,7 @@ const keyRoutes = require("./routes/keyRoutes");
 const mfgRoutes = require("./routes/mfgRoutes");
 const lockRoutes = require("./routes/lockRoutes");
 const userRoutes = require("./routes/userRoutes");
+const inviteRoutes = require("./routes/inviteRoutes");
 
 
 const app = express();
@@ -46,6 +47,7 @@ app.use("/api", keyRoutes);
 app.use("/api", mfgRoutes);
 app.use("/api", lockRoutes);
 app.use("/api", userRoutes);
+app.use("/api/invite", inviteRoutes);
 
 app.use(errorHandler);
 

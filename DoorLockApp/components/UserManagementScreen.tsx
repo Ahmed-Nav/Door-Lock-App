@@ -1,144 +1,263 @@
 // DoorLockApp/components/UserManagementScreen.tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
-import { listUsers, updateUserRole, deleteUser } from '../services/apiService';
-import { useAuth } from '../auth/AuthContext';
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+} from 'react-native';
 import Toast from 'react-native-toast-message';
+import { useAuth } from '../auth/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
+import DropDownPicker from 'react-native-dropdown-picker';
+
+import {
+  listUsers,
+  updateUserRole,
+  deleteUser,
+  inviteUser,
+} from '../services/apiService';
 
 export default function UserManagementScreen() {
-  const { token, role, email: currentEmail } = useAuth();
-  const [users, setUsers] = useState<any[]>([]);
+  const { token, activeWorkspace, role } = useAuth();
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const data = await listUsers(token);
-      setUsers(data);
-    } catch (err: any) {
-      console.error('listUsers failed:', err?.response?.data || err);
-      Toast.show({ type: 'error', text1: 'Failed to load users.' })
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState(null);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [roleItems, setRoleItems] = useState([
+    { label: 'Admin', value: 'admin' },
+    { label: 'User', value: 'user' },
+  ]);
+  // --- End V2 State ---
 
-  const handleRoleChange = async (userId: string, currentRole: string) => {
-    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+  const fetchUsers = useCallback(async () => {
+    if (!token || !activeWorkspace) return;
+    setLoading(true);
     try {
-      await updateUserRole(token, userId, newRole);
-      Toast.show({ type: 'success', text1: `User role updated to ${newRole}` })
+      const data = await listUsers(token, activeWorkspace.workspace_id);
+      setUsers(data.users || []);
+    } catch (anyErr) {
+      const err = anyErr as any;
+      Alert.alert('Error', err?.response?.data?.err || 'Failed to load users.');
+    }
+    setLoading(false);
+  }, [token, activeWorkspace]);
+
+  useFocusEffect(
+    useCallback(() => {
       fetchUsers();
-    } catch (err: any) {
-      console.error('updateUserRole failed:', err?.response?.data || err);
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update role.' })
-    }
-  };
+    }, [token, activeWorkspace?.workspace_id]),
+  );
 
-  const handleDeleteUser = ( userId: string, userEmail: string ) => {
-    Alert.alert(
-      'Confirm User Deletion',
-      `Are you sure you want to permanently delete user: ${userEmail}? This action cannot be undone and will remove them from all groups/locks.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteUser(token, userId);
-              Toast.show({ type: "success", text1: "User Deleted", text2: `${userEmail} has been removed.` });
-              fetchUsers();
-            } catch(err: any) {
-              console.error("deleteUser failed:", err?.response?.data || err);
-              Toast.show({ type: "error", text1: "Error", text2: "Failed to delete user." });
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  useEffect(() => {
-    if (role !== 'admin') {
-      Toast.show({ type: 'info', text1: 'Access Denied', text2: 'You are not authorized to view this page.' })
+  // V2: This handler is now workspace-aware
+  const handleRoleChange = async (userId: string, currentRole: string) => {
+    if (!activeWorkspace) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No active workspace selected.',
+      });
       return;
     }
-    fetchUsers();
-  }, []);
+    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+    try {
+      await updateUserRole(
+        token,
+        activeWorkspace.workspace_id,
+        userId,
+        newRole,
+      );
+      Toast.show({
+        type: 'success',
+        text1: 'Role updated',
+        text2: `User role updated to ${newRole}`,
+      });
+      fetchUsers();
+    } catch (anyErr) {
+      const err = anyErr as any;
+      console.error(err?.response?.data);
+      Alert.alert(
+        'Error',
+        `Failed to update role: ${err?.response?.data?.err}`,
+      );
+    }
+  };
 
-  if (loading) {
+  const handleInvite = async () => {
+    if (!inviteEmail || !inviteRole) {
+      Toast.show({ type: 'error', text1: 'Missing fields' });
+      return;
+    }
+    if (!token || !activeWorkspace) return;
+
+    setIsInviting(true);
+    try {
+      await inviteUser(
+        token,
+        activeWorkspace.workspace_id,
+        inviteEmail,
+        inviteRole,
+      );
+      Toast.show({
+        type: 'success',
+        text1: 'Invite Sent',
+        text2: `Invite successfully sent to ${inviteEmail}`,
+      });
+      setInviteEmail('');
+      setInviteRole(null);
+    } catch (anyErr) {
+      const err = anyErr as any;
+      console.error(err?.response?.data);
+      Alert.alert(
+        'Invite Failed',
+        err?.response?.data?.message || 'An error occurred',
+      );
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  if (loading && users.length === 0) {
     return (
-      <View style={styles.loading}>
+      <View style={s.container}>
         <ActivityIndicator color="#7B1FA2" size="large" />
       </View>
     );
   }
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.email}>{item.email}</Text>
-      <Text style={styles.role}>Role: {item.role}</Text>
-      {item.email !== currentEmail && (
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-        style={[
-          styles.btn,
-          { backgroundColor: item.role === 'admin' ? '#b23b3b' : '#3b82f6' },
-        ]}
-        onPress={() => handleRoleChange(item._id, item.role)}
+  const renderInviteForm = () => (
+    <View style={[s.card, { zIndex: 1000 }]}>
+      <Text style={s.header}>Invite New User</Text>
+      <TextInput
+        style={s.input}
+        placeholder="Enter user email"
+        placeholderTextColor="#888"
+        value={inviteEmail}
+        onChangeText={setInviteEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+      />
+      <DropDownPicker
+        open={roleDropdownOpen}
+        value={inviteRole}
+        items={roleItems}
+        setOpen={setRoleDropdownOpen}
+        setValue={setInviteRole}
+        setItems={setRoleItems}
+        placeholder="Select a role"
+        style={s.dropdown}
+        textStyle={{ color: 'white' }}
+        dropDownContainerStyle={s.dropdownContainer}
+        zIndex={1000}
+      />
+      <TouchableOpacity
+        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
+        onPress={handleInvite}
+        disabled={isInviting || !inviteEmail || !inviteRole}
       >
-        <Text style={styles.btnText}>
-          {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+        <Text style={s.btnText}>
+          {isInviting ? 'Sending...' : 'Send Invite'}
         </Text>
       </TouchableOpacity>
-      <TouchableOpacity
-          style={[styles.btn, styles.deleteBtn]}
-          onPress={() => handleDeleteUser(item._id, item.email)}
+    </View>
+  );
+
+  const renderItem = ({ item }: { item: any }) => (
+    <View style={s.card}>
+      <Text style={s.email}>{item.email}</Text>
+      <Text style={s.role}>Role: {item.role}</Text>
+
+      {item.role !== 'owner' && (
+        <TouchableOpacity
+          style={[s.btn, item.role === 'admin' ? s.demoteBtn : s.promoteBtn]}
+          onPress={() => handleRoleChange(item.id, item.role)}
         >
-          <Text style={styles.btnText}>Delete User</Text>
+          <Text style={s.btnText}>
+            {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+          </Text>
         </TouchableOpacity>
-      </View>
-    )}
+      )}
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <FlatList
         data={users}
+        ListHeaderComponent={renderInviteForm}
         renderItem={renderItem}
-        keyExtractor={u => u._id}
+        keyExtractor={item => item.id}
         contentContainerStyle={{ paddingBottom: 40 }}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b0b0f', padding: 16 },
-  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+const s = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0b0b0f',
+    padding: 16,
+  },
+  header: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
   card: {
     backgroundColor: '#1d1d25',
-    padding: 16,
     borderRadius: 10,
+    padding: 16,
     marginBottom: 12,
   },
-  email: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  role: { color: '#ccc', marginVertical: 6 },
-  btn: { padding: 10, borderRadius: 8, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '700' },
-  buttonRow: { 
-    flexDirection: 'row', 
-    marginTop: 10, 
-    justifyContent: 'space-between', 
-    gap: 8,
+  email: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  roleBtn: { 
-    flex: 2, 
-  }, 
-  deleteBtn: {
-    flex: 1, 
-    backgroundColor: '#8B0000', 
+  role: {
+    color: '#aaa',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  btn: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  btnText: {
+    color: 'white',
+    fontWeight: '700',
+  },
+  promoteBtn: {
+    backgroundColor: '#3b82f6',
+  },
+  demoteBtn: {
+    backgroundColor: '#888',
+  },
+  input: {
+    backgroundColor: '#0b0b0f',
+    color: 'white',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  dropdown: {
+    backgroundColor: '#0b0b0f',
+    borderColor: '#2a2a33',
+    marginBottom: 12,
+  },
+  dropdownContainer: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
   },
 });

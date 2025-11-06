@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0",
     "@react-native-async-storage/async-storage": "^2.2.0",

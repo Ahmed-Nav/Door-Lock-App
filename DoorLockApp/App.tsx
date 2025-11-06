@@ -12,6 +12,8 @@ import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 
 import * as Sentry from '@sentry/react-native';
 
+import { Linking } from 'react-native';
+
 import { AuthProvider, useAuth } from './auth/AuthContext';
 
 import RoleSelectScreen from './components/RoleSelectScreen';
@@ -38,6 +40,8 @@ import EditLockModal from './components/EditLockModal';
 
 import UserManagementScreen from './components/UserManagementScreen';
 
+import InviteHandlerScreen from './components/InviteHandlerScreen';
+
 export type RootStackParamList = {
   AdminHome: undefined;
 
@@ -62,9 +66,20 @@ export type RootStackParamList = {
   GroupDetail: { groupId: string };
 
   Ownership: undefined;
+
+  InviteHandler: { token: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const linking = {
+  prefixes: ['com.doorlockapp://'],
+  config: {
+    screens: {
+      InviteHandler: 'invite/:token',
+    },
+  },
+};
 
 const toastConfig = {
   success: props => (
@@ -154,6 +169,7 @@ function Router() {
           component={OwnershipScreen}
           options={{ title: 'Ownership' }}
         />
+        <Stack.Screen name="InviteHandler" component={InviteHandlerScreen} />
       </Stack.Navigator>
     );
   }
@@ -164,7 +180,7 @@ function Router() {
         <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
         <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
         <Stack.Screen name="UserManagement" component={UserManagementScreen} />
-        <Stack.Screen name="RenameLock" component={EditLockModal} />
+        <Stack.Screen name="EditLock" component={EditLockModal} />
         <Stack.Screen name="ClaimLock" component={ClaimLockScreen} />
         <Stack.Screen name="ClaimQr" component={ClaimQrScreen} />
         <Stack.Screen name="GlobalGroups" component={GlobalGroupsScreen} />
@@ -175,6 +191,7 @@ function Router() {
         <Stack.Screen name="GroupDetail" component={GroupDetail} />
         <Stack.Screen name="Ownership" component={OwnershipScreen} />
         <Stack.Screen name="Unlock" component={UnlockScreen} />
+        <Stack.Screen name="InviteHandler" component={InviteHandlerScreen} />
       </Stack.Navigator>
     );
   }
@@ -191,6 +208,7 @@ function Router() {
         component={UnlockScreen}
         options={{ title: 'Unlock' }}
       />
+      <Stack.Screen name="InviteHandler" component={InviteHandlerScreen} />
     </Stack.Navigator>
   );
 }
