@@ -171,7 +171,8 @@ export default function LocksHomeScreen() {
   };
 
   const goClaim = () => nav.navigate('ClaimLock');
-  const goManage = lockId => nav.navigate('Groups', { lockId });
+  const goManage = (lockId, name) =>
+    nav.navigate('ManageLockAccess', { lockId: lockId, lockName: name });
   const goEdit = (lockId, name) =>
     nav.navigate('EditLock', { lockId, currentName: name });
   const goUnlock = lockId => nav.navigate('Unlock', { lockId });
@@ -202,7 +203,7 @@ export default function LocksHomeScreen() {
           {role === 'admin' && (
             <TouchableOpacity
               style={s.smallBtn}
-              onPress={() => goManage(item.lockId)}
+              onPress={() => goManage(item.lockId, item.name)}
             >
               <Text style={s.smallBtnTxt}>Manage</Text>
             </TouchableOpacity>

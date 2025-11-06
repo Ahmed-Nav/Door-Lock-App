@@ -1,6 +1,12 @@
 // components/AdminHomeScreen.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
@@ -25,17 +31,22 @@ export default function AdminHomeScreen() {
           style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('LocksHome')}
         >
-          
           <Text style={s.cardTitle}>Manage Locks</Text>
           <Text style={s.desc}>View, rename, and manage lock access</Text>
         </TouchableOpacity>
 
-        {/* Manage Users */}
+        <TouchableOpacity
+          style={s.card}
+          onPress={() => nav.navigate('GlobalGroups')}
+        >
+          <Text style={s.cardTitle}>Manage User Groups</Text>
+          <Text style={s.desc}>Create groups and add/remove users.</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('UserManagement')}
         >
-          
           <Text style={s.cardTitle}>Manage Users</Text>
           <Text style={s.desc}>View users and assign admin roles</Text>
         </TouchableOpacity>

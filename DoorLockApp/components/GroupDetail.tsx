@@ -15,12 +15,9 @@ import { useAuth } from '../auth/AuthContext';
 import {
   getGroup,
   addUserToGroup,
-  assignLockToGroup,
   removeUserFromGroup,
-  unassignLockFromGroup,
   deleteGroup,
   listUsers,
-  listLocks,
 } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
@@ -37,12 +34,7 @@ export default function GroupDetail() {
   const [userOpen, setUserOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<{ label: string; value: string }[]>([]);
-
-  const [lockOpen, setLockOpen] = useState(false);
-  const [selectedLock, setSelectedLock] = useState<number | null>(null);
-  const [lockOptions, setLockOptions] = useState<{ label: string; value: number }[]>([]);
-
-  
+ 
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -60,10 +52,7 @@ export default function GroupDetail() {
   
   const loadDropdowns = useCallback(async () => {
   try {
-    const [usersRes, locksRes] = await Promise.all([
-      listUsers(token),
-      listLocks(token),
-    ]);
+    const usersRes = await listUsers(token);
 
     const groupUsers = g?.users?.map((u: any) => u.email) || [];
     const groupLocks = g?.lockIds || [];
@@ -71,26 +60,14 @@ export default function GroupDetail() {
     const usersArray = Array.isArray(usersRes)
       ? usersRes
       : usersRes?.users || [];
-    const locksArray = Array.isArray(locksRes)
-      ? locksRes
-      : locksRes?.locks || [];
 
     console.log('Dropdown → users:', usersArray);
-    console.log('Dropdown → locks:', locksArray);
 
     const filteredUsers = usersArray
       .filter((u: any) => !groupUsers.includes(u.email))
       .map((u: any) => ({ label: u.email, value: u.email }));
 
-    const filteredLocks = locksArray
-  .filter((l: any) => !groupLocks.includes(l.lockId))
-  .map((l: any) => ({
-    label: `Lock #${l.lockId}${l.name ? ` (${l.name})` : ''}`,
-    value: l.lockId,
-  }));
-
     setUserOptions(filteredUsers);
-    setLockOptions(filteredLocks);
   } catch (e) {
     console.warn('Dropdown load failed', e);
   }
@@ -113,33 +90,11 @@ export default function GroupDetail() {
     }
   };
 
-  const doAssignLock = async () => {
-    if (!selectedLock) return Toast.show({ type: 'info', text1: 'Select a lock first' }) 
-    try {
-      await assignLockToGroup(token, groupId, selectedLock);
-      setSelectedLock(null);
-      await load();
-      Toast.show({ type: 'success', text1: 'Lock Assigned', text2: `Lock #${selectedLock} has been assigned to the group.` });
-    } catch (e) {
-      Toast.show({ type: 'error', text1: 'Assign lock failed', text2: String(e?.response?.data?.err || e?.message || e) })
-    }
-  };
-
   const doRemoveUser = async (userEmail: string) => {
     try {
       await removeUserFromGroup(token, groupId, userEmail);
       await load();
       Toast.show({ type: 'success', text1: 'User Removed', text2: `${userEmail} has been removed from the group.` });
-    } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
-    }
-  };
-
-  const doUnassignLock = async (id: number) => {
-    try {
-      await unassignLockFromGroup(token, groupId, id);
-      await load();
-      Toast.show({ type: 'success', text1: 'Lock Unassigned', text2: `Lock #${id} has been unassigned.` });
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
     }
@@ -195,7 +150,6 @@ export default function GroupDetail() {
           textStyle={{ color: 'white' }}
           dropDownContainerStyle={s.dropdownContainer}
           placeholderStyle={{ color: '#888' }}
-          onOpen={() => setLockOpen(false)}
         />
       </View>
       <TouchableOpacity
@@ -203,36 +157,6 @@ export default function GroupDetail() {
         onPress={doAddUser}
       >
         <Text style={s.btnText}>Add user</Text>
-      </TouchableOpacity>
-
-      <Text style={[s.sub, { marginTop: 12 }]}>Assign Lock</Text>
-      <View
-        style={{
-          zIndex: lockOpen ? 2000 : 1000,
-          elevation: lockOpen ? 2000 : 1000,
-        }}
-      >
-        <DropDownPicker
-          open={lockOpen}
-          value={selectedLock}
-          items={lockOptions}
-          setOpen={setLockOpen}
-          setValue={setSelectedLock}
-          setItems={setLockOptions}
-          placeholder="Select lock"
-          style={s.dropdown}
-          textStyle={{ color: 'white' }}
-          dropDownContainerStyle={s.dropdownContainer}
-          placeholderStyle={{ color: '#888' }}
-          // 👇 closes user dropdown safely
-          onOpen={() => setUserOpen(false)}
-        />
-      </View>
-      <TouchableOpacity
-        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
-        onPress={doAssignLock}
-      >
-        <Text style={s.btnText}>Assign lock</Text>
       </TouchableOpacity>
 
       <Text style={s.t2}>Users</Text>
@@ -251,24 +175,6 @@ export default function GroupDetail() {
           </View>
         )}
         ListEmptyComponent={<Text style={s.empty}>No users</Text>}
-      />
-
-      <Text style={[s.t2, { marginTop: 12 }]}>Locks</Text>
-      <FlatList
-        data={g.lockIds}
-        keyExtractor={id => String(id)}
-        renderItem={({ item }) => (
-          <View style={s.rowItem}>
-            <Text style={s.rowText}>Lock #{item}</Text>
-            <TouchableOpacity
-              style={[s.btn, { backgroundColor: '#9b1c1c' }]}
-              onPress={() => doUnassignLock(item)}
-            >
-              <Text style={s.btnText}>Unassign</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={s.empty}>No locks</Text>}
       />
 
       <TouchableOpacity
