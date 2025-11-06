@@ -26,7 +26,7 @@ import { Platform, PermissionsAndroid } from 'react-native';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
-  const { token, role } = useAuth();
+  const { token, role, activeWorkspace } = useAuth();
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockStatuses, setUnlockStatuses] = useState({});
@@ -52,13 +52,18 @@ export default function LocksHomeScreen() {
   }
 
   const load = useCallback(async () => {
+    if (!token || !activeWorkspace) {
+      setLocks([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       let res;
-      if (role === 'admin') {
-        res = await listLocks(token);
+      if (role === 'admin' || role === 'owner') {
+        res = await listLocks(token, activeWorkspace.workspace_id);
       } else if (role === 'user') {
-        res = await fetchMyLocks(token);
+        res = await fetchMyLocks(token, activeWorkspace.workspace_id);
       } else {
         setLocks([]);
         return;
@@ -89,7 +94,7 @@ export default function LocksHomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [token, role]);
+  }, [token, role, activeWorkspace]);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +112,7 @@ export default function LocksHomeScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            if (!token || !activeWorkspace) return;
             try {
               setLoading(true);
               await deleteLock(token, lockId);
@@ -181,6 +187,8 @@ export default function LocksHomeScreen() {
   const renderItem = ({ item }) => {
     const unlockStatus = unlockStatuses[item.lockId];
 
+    const isAdminOrOwner = role === 'admin' || role === 'owner';
+
     return (
       <View style={s.card}>
         <View style={{ flex: 1 }}>
@@ -200,7 +208,7 @@ export default function LocksHomeScreen() {
             </TouchableOpacity>
           )}
 
-          {role === 'admin' && (
+          {isAdminOrOwner && (
             <TouchableOpacity
               style={s.smallBtn}
               onPress={() => goManage(item.lockId, item.name)}
@@ -209,7 +217,7 @@ export default function LocksHomeScreen() {
             </TouchableOpacity>
           )}
 
-          {role === 'admin' && (
+          {isAdminOrOwner && (
             <TouchableOpacity
               style={s.smallBtn}
               onPress={() => goEdit(item.lockId, item.name)}
@@ -235,7 +243,7 @@ export default function LocksHomeScreen() {
             </TouchableOpacity>
           )}
 
-          {role === 'admin' && (
+          {isAdminOrOwner && (
             <TouchableOpacity
               onPress={() =>
                 handleDelete(item.lockId, item.name || `Lock #${item.lockId}`)
@@ -257,7 +265,7 @@ export default function LocksHomeScreen() {
 
       {locks.length === 0 && !loading ? (
         <Text style={s.empty}>
-          {role === 'admin'
+          {role === 'admin' || role === 'owner'
             ? 'No locks yet. Tap + to claim one.'
             : 'You have not been given access to any locks.'}
         </Text>
@@ -270,7 +278,7 @@ export default function LocksHomeScreen() {
         />
       )}
 
-      {role === 'admin' && (
+      {(role === 'admin' || role === 'owner') && (
         <TouchableOpacity style={s.fab} onPress={goClaim}>
           <Text style={s.fabTxt}>＋</Text>
         </TouchableOpacity>

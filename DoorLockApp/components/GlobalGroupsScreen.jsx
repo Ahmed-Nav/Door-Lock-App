@@ -9,7 +9,8 @@ import {
   FlatList,
   Modal,
   TouchableWithoutFeedback,
-  TextInput
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
@@ -64,39 +65,59 @@ const GroupCreationModal = ({
 );
 
 export default function GlobalGroupsScreen() {
-  const { token, role } = useAuth();
+  const { token, role, activeWorkspace } = useAuth();
   const nav = useNavigation();
   const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
 
   const load = useCallback(async () => {
-    if (role !== 'admin') return;
+    if (role !== 'admin' || !activeWorkspace) {
+      setGroups([]);
+      return;
+    }
     try {
-      const res = await listGroups(token);
+      setLoading(true);
+      const res = await listGroups(token, activeWorkspace.workspace_id);
       setGroups(res?.groups || []);
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Error loading groups' });
+    } finally {
+      setLoading(false);
     }
-  }, [token, role]);
+  }, [token, role, activeWorkspace]);
 
-  useFocusEffect(load);
+  useFocusEffect(
+    useCallback(() => {
+      async function fetchData() {
+        await load();
+      }
+      fetchData();
 
-  const goToGroupDetail = (groupId) => {
+      return () => {};
+    }, [load]),
+  );
+
+  const goToGroupDetail = groupId => {
     nav.navigate('GroupDetail', { groupId });
   };
 
-  const onCreate = async (groupName) => {
+  const onCreate = async groupName => {
     if (!groupName.trim()) {
       Toast.show({ type: 'error', text1: 'Name Required' });
       return;
     }
+    if (!token || !activeWorkspace) {
+      Toast.show({ type: 'error', text1: 'No active workspace' });
+      return;
+    }
 
     try {
-      await createGroup(token, groupName.trim());
+      await createGroup(token, activeWorkspace.workspace_id, groupName.trim());
       setNewGroupName('');
       setIsModalVisible(false);
-      await load(); 
+      await load();
 
       Toast.show({
         type: 'success',
@@ -113,13 +134,10 @@ export default function GlobalGroupsScreen() {
   };
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={s.card}
-      onPress={() => goToGroupDetail(item._id)}
-    >
+    <TouchableOpacity style={s.card} onPress={() => goToGroupDetail(item._id)}>
       <Text style={s.cardTitle}>{item.name}</Text>
       <Text style={s.cardMeta}>
-        users: {item.userCount ?? item.userIds?.length ?? 0} • locks: {' '}
+        users: {item.userCount ?? item.userIds?.length ?? 0} • locks:{' '}
         {item.lockCount ?? item.lockIds?.length ?? 0}
       </Text>
     </TouchableOpacity>
@@ -128,12 +146,21 @@ export default function GlobalGroupsScreen() {
   return (
     <View style={s.c}>
       <Text style={s.t}>All User Groups</Text>
-      <FlatList
-        data={groups}
-        keyExtractor={(g) => g._id}
-        renderItem={renderItem}
-        style={{ marginTop: 12 }}
-      />
+      {loading ? (
+        <ActivityIndicator
+          size="large"
+          color="#7B1FA2"
+          style={{ marginTop: 20 }}
+        />
+      ) : (
+        <FlatList
+          data={groups}
+          keyExtractor={g => g._id}
+          renderItem={renderItem}
+          style={{ marginTop: 12 }}
+          ListEmptyComponent={<Text style={s.empty}>No groups found.</Text>} // <-- V2: Added
+        />
+      )}
       <TouchableOpacity style={s.fab} onPress={() => setIsModalVisible(true)}>
         <Text style={s.fabTxt}>＋</Text>
       </TouchableOpacity>
@@ -224,5 +251,10 @@ const s = StyleSheet.create({
   },
   confirmBtn: {
     backgroundColor: '#7B1FA2',
+  },
+  empty: {
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 30,
   },
 });

@@ -14,7 +14,7 @@ import { claimFirstLock, claimExistingLock } from '../services/apiService';
 import { getOrCreateDeviceKey, saveClaimContext } from '../lib/keys';
 
 export default function ClaimLockScreen() {
-  const { token, activeWorkspace, onSignIn } = useAuth();
+  const { token, user, activeWorkspace, signIn } = useAuth();
   const route = useRoute();
   const navigation = useNavigation();
 
@@ -86,7 +86,7 @@ export default function ClaimLockScreen() {
       Toast.show({ type: 'success', text1: 'Claimed' });
 
       if (isNewUser) {
-        await onSignIn(token);
+        await signIn(token);
       }
 
       navigation.replace('Ownership', {
@@ -162,7 +162,11 @@ export default function ClaimLockScreen() {
     <ScrollView style={s.c}>
       <Text style={s.t}>Claim a lock</Text>
       <Text style={s.label}>
-        {email ? `Signed in as ${email} (${role})` : 'Not signed in'}
+               {' '}
+        {user?.email
+          ? `Signed in as ${user.email} (${activeWorkspace?.role || 'User'})`
+          : 'Not signed in'}
+             {' '}
       </Text>
 
       {claimMode === null && (
