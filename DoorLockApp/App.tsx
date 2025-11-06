@@ -20,17 +20,15 @@ import UnlockScreen from './components/UnlockScreen';
 
 import AdminHomeScreen from './components/AdminHomeScreen';
 
-import GroupsScreen from './components/GroupsScreen';
+import ManageLockAccessScreen from './components/ManageLockAccessScreen';
+
+import GlobalGroupsScreen from './components/GlobalGroupsScreen';
 
 import GroupDetail from './components/GroupDetail';
-
-import PushAclScreen from './components/PushAclScreen';
 
 import ClaimLockScreen from './components/ClaimLockScreen';
 
 import ClaimQrScreen from './components/ClaimQrScreen';
-
-import RebuildAclScreen from './components/RebuildAclScreen';
 
 import OwnershipScreen from './components/OwnershipScreen';
 
@@ -57,13 +55,11 @@ export type RootStackParamList = {
 
   ClaimQr: undefined;
 
-  Groups: { lockId: number; lockName?: string } | undefined;
+  GlobalGroups: undefined;
+
+  ManageLockAccess: { lockId: number; lockName?: string };
 
   GroupDetail: { groupId: string };
-
-  PushAcl: { lockId: number; envelope?: any };
-
-  RebuildAcl: undefined;
 
   Ownership: undefined;
 };
@@ -133,6 +129,24 @@ function Router() {
           name="ClaimQr"
           component={ClaimQrScreen}
           options={{ title: 'Scan Claim QR' }}
+        />
+
+        <Stack.Screen
+          name="GlobalGroups"
+          component={GlobalGroupsScreen}
+          options={{ title: 'User Groups' }}
+        />
+
+        <Stack.Screen
+          name="ManageLockAccess"
+          component={ManageLockAccessScreen}
+          options={{ title: 'Manage Lock Access' }}
+        />
+
+        <Stack.Screen
+          name="GroupDetail"
+          component={GroupDetail}
+          options={{ title: 'Group Detail' }}
         />
 
         <Stack.Screen
