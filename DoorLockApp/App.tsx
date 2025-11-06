@@ -104,51 +104,31 @@ const toastConfig = {
 };
 
 function Router() {
-  const { role, loading } = useAuth();
+  const { role, loading, token, activeWorkspace } = useAuth();
 
-  if (loading) return null;
+  if (loading) {
+    return null; 
+  }
 
-  if (!role) {
+
+  if (!token) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
+   
         <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
       </Stack.Navigator>
     );
   }
 
-  if (role === 'admin') {
+
+  if (!activeWorkspace) {
     return (
       <Stack.Navigator>
         <Stack.Screen
-          name="AdminHome"
-          component={AdminHomeScreen}
-          options={{ title: 'Admin Dashboard' }}
-        />
-
-        <Stack.Screen
-          name="LocksHome"
-          component={LocksHomeScreen}
-          options={{ title: 'My Locks' }}
-        />
-
-        <Stack.Screen
-          name="UserManagement"
-          component={UserManagementScreen}
-          options={{ title: 'Manage Users' }}
-        />
-
-        <Stack.Screen
-          name="EditLock"
-          component={EditLockModal}
-          options={{ title: 'Edit Lock' }}
-        />
-
-        <Stack.Screen
           name="ClaimLock"
           component={ClaimLockScreen}
-          options={{ title: 'Claim Lock' }}
+          options={{ title: 'Claim Your First Lock' }}
         />
-
         <Stack.Screen
           name="ClaimQr"
           component={ClaimQrScreen}
@@ -156,40 +136,31 @@ function Router() {
         />
 
         <Stack.Screen
-          name="Groups"
-          component={GroupsScreen}
-          options={{ title: 'Groups' }}
-        />
-
-        <Stack.Screen
-          name="GroupDetail"
-          component={GroupDetail}
-          options={{ title: 'Group Detail' }}
-        />
-
-        <Stack.Screen
-          name="PushAcl"
-          component={PushAclScreen}
-          options={{ title: 'Push ACL' }}
-        />
-
-        <Stack.Screen
-          name="RebuildAcl"
-          component={RebuildAclScreen}
-          options={{ title: 'Rebuild ACL' }}
-        />
-
-        <Stack.Screen
           name="Ownership"
           component={OwnershipScreen}
           options={{ title: 'Ownership' }}
         />
+      </Stack.Navigator>
+    );
+  }
 
+  if (role === 'admin' || role === 'owner') {
+    return (
+      <Stack.Navigator>
+        <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
+        <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
+        <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+        <Stack.Screen name="RenameLock" component={EditLockModal} />
+        <Stack.Screen name="ClaimLock" component={ClaimLockScreen} />
+        <Stack.Screen name="ClaimQr" component={ClaimQrScreen} />
+        <Stack.Screen name="GlobalGroups" component={GlobalGroupsScreen} />
         <Stack.Screen
-          name="Unlock"
-          component={UnlockScreen}
-          options={{ title: 'Unlock' }}
+          name="ManageLockAccess"
+          component={ManageLockAccessScreen}
         />
+        <Stack.Screen name="GroupDetail" component={GroupDetail} />
+        <Stack.Screen name="Ownership" component={OwnershipScreen} />
+        <Stack.Screen name="Unlock" component={UnlockScreen} />
       </Stack.Navigator>
     );
   }

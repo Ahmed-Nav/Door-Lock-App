@@ -9,198 +9,252 @@ export const api = axios.create({
 });
 
 api.interceptors.response.use(
-  (r) => r,
-  (err) => {
-    const status = err?.response?.status;
-    if (status === 401) {
-      
-    }
+  r => r,
+  err => {
+    // ... (your interceptor is fine) ...
     return Promise.reject(err);
-  }
+  },
 );
 
-
+// V1 helper (still used for getMe)
 export const auth = token => ({
   headers: { Authorization: `Bearer ${token}` },
 });
 
-
-export const getMe = async token => {
-  const r = await axios.get(`${API_URL}/auth/me`, auth(token));
-  return r.data; // { ok:true, user:{id,email,role} }
+// --- THIS IS THE NEW V2 HELPER ---
+// We will use this for every API call that needs to be "workspace-aware"
+export const authWorkspace = (token, workspaceId) => {
+  if (!workspaceId) {
+    // Safety check to prevent bugs
+    throw new Error('No active workspace selected. API call aborted.');
+  }
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-ID': workspaceId,
+    },
+  };
 };
 
+// --- AUTH ROUTES ---
+// getMe is called BEFORE a workspace is selected. It does NOT change.
+export const getMe = async token => {
+  const r = await axios.get(`${API_URL}/auth/me`, auth(token));
+  // V2: This now returns { ok: true, user: { id, email, workspaces: [...] } }
+  return r.data;
+};
 
+// syncUserToBackend also does NOT change.
 export const syncUserToBackend = async token => {
   const r = await axios.post(`${API_URL}/auth/sync`, {}, auth(token));
   return r.data;
 };
 
+// --- V2: getAdminPub NOW REQUIRES a workspace ID ---
+export const getAdminPub = async (token, workspaceId) => {
+  try {
+    const r = await axios.get(
+      `${API_URL}/auth/admin/pub`,
+      authWorkspace(token, workspaceId), // <-- V2 Change
+    );
+    return r.data;
+  } catch (e) {
+    console.log('getAdminPub failed:', e);
+    throw e;
+  }
+};
 
-export const getGroup = async (token, groupId) => {
-  const r = await axios.get(`${API_URL}/groups/${groupId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// --- GROUP ROUTES (ALL CHANGED) ---
+export const getGroup = async (token, workspaceId, groupId) => {
+  const r = await api.get(
+    `/groups/${groupId}`,
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
   return r.data;
 };
 
-export const listGroups = async token => {
-  const r = await axios.get(`${API_URL}/groups`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export const listGroups = async (token, workspaceId) => {
+  const r = await api.get('/groups', authWorkspace(token, workspaceId)); // <-- V2 Change
   return r.data;
 };
 
-export const createGroup = async (token, name) => {
-  const r = await axios.post(`${API_URL}/groups`, { name }, auth(token));
+export const createGroup = async (token, workspaceId, name) => {
+  const r = await api.post(
+    '/groups',
+    { name },
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
   return r.data;
 };
 
 export const addUserToGroup = async (
   token,
+  workspaceId,
   groupId,
   userEmail,
   { remove = false } = {},
 ) => {
-  const r = await axios.post(
-    `${API_URL}/groups/${groupId}/users`,
+  const r = await api.post(
+    `/groups/${groupId}/users`,
     { userEmail, remove },
-    auth(token),
+    authWorkspace(token, workspaceId), // <-- V2 Change
   );
   return r.data;
 };
 
 export const assignLockToGroup = async (
   token,
+  workspaceId,
   groupId,
   lockId,
   { remove = false } = {},
 ) => {
-  const r = await axios.post(
-    `${API_URL}/groups/${groupId}/locks`,
+  const r = await api.post(
+    `/groups/${groupId}/locks`,
     { lockId, remove },
-    auth(token),
+    authWorkspace(token, workspaceId), // <-- V2 Change
   );
   return r.data;
 };
 
-export const removeUserFromGroup = async (token, groupId, userEmail) => {
-  const r = await axios.post(
-    `${API_URL}/groups/${groupId}/users`,
+export const removeUserFromGroup = async (
+  token,
+  workspaceId,
+  groupId,
+  userEmail,
+) => {
+  const r = await api.post(
+    `/groups/${groupId}/users`,
     { userEmail, remove: true },
-    { headers: { Authorization: `Bearer ${token}` } },
+    authWorkspace(token, workspaceId), // <-- V2 Change
   );
   return r.data;
 };
 
-export const unassignLockFromGroup = async (token, groupId, lockId) => {
-  const r = await axios.post(
-    `${API_URL}/groups/${groupId}/locks`,
+export const unassignLockFromGroup = async (
+  token,
+  workspaceId,
+  groupId,
+  lockId,
+) => {
+  const r = await api.post(
+    `/groups/${groupId}/locks`,
     { lockId, remove: true },
-    { headers: { Authorization: `Bearer ${token}` } },
+    authWorkspace(token, workspaceId), // <-- V2 Change
   );
   return r.data;
 };
 
-export const deleteGroup = async (token, groupId) => {
-  const r = await axios.delete(`${API_URL}/groups/${groupId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return r.data;
-};
-
-
-export const claimLockOnServer = async (token, { lockId, claimCode, kid }) => {
-  const r = await axios.post(
-    `${API_URL}/locks/${lockId}/claim`,
-    { claimCode, kid },
-    auth(token),
+export const deleteGroup = async (token, workspaceId, groupId) => {
+  const r = await api.delete(
+    `/groups/${groupId}`,
+    authWorkspace(token, workspaceId), // <-- V2 Change
   );
   return r.data;
 };
 
+// --- LOCK & CLAIM ROUTES (ALL CHANGED) ---
 
-export const rebuildAcl = async (token, lockId) => {
-  const r = await axios.post(
-    `${API_URL}/locks/${lockId}/acl/rebuild`,
-    {},
-    auth(token),
+// V2: This is the new function for the "New User" flow
+export const claimFirstLock = async (
+  token,
+  { lockId, claimCode, kid, newWorkspaceName },
+) => {
+  const r = await api.post(
+    `/locks/${lockId}/claim`,
+    { claimCode, kid, workspaceName: newWorkspaceName },
+    auth(token), // This flow does *not* send a workspace ID
   );
-  return r.data; 
+  return r.data;
 };
 
-export const fetchLatestAcl = async (token, lockId) => {
-  const r = await axios.get(
-    `${API_URL}/locks/${lockId}/acl/latest`,
-    auth(token),
+// V2: This is the new function for the "Existing User" flow
+export const claimExistingLock = async (
+  token,
+  workspaceId,
+  { lockId, claimCode, kid },
+) => {
+  const r = await api.post(
+    `/locks/${lockId}/claim`,
+    { claimCode, kid }, // No workspaceName in the body
+    authWorkspace(token, workspaceId), // Sends workspace ID in the header
   );
-  return r.data; 
+  return r.data;
 };
 
-
-export const getAdminPub = async token => {
-  try {
-    const r = await axios.get(`${API_URL}/auth/admin/pub`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
-    return r.data; 
-  } catch (e) {
-    console.log('getAdminPub failed:', {
-      url: `${API_URL}/auth/admin/pub`,
-      status: e?.response?.status,
-      data: e?.response?.data,
-      message: e?.message,
-    });
-    throw e;
-  }
+export const listLocks = async (token, workspaceId) => {
+  const r = await api.get('/locks', authWorkspace(token, workspaceId)); // <-- V2 Change
+  return r.data;
 };
 
-export const listLocks = async token => {
-  const r = await api.get('/locks', auth(token));
-  return r.data; 
+export const fetchMyLocks = async (token, workspaceId) => {
+  const r = await api.get('/locks/my', authWorkspace(token, workspaceId)); // <-- V2 Change
+  return r.data;
 };
 
-export const fetchMyLocks = async token => {
-  const r = await api.get('/locks/my', auth(token));
-  return r.data; 
-};
-
-export async function updateLockName(token, lockId, name) {
+export async function updateLockName(token, workspaceId, lockId, name) {
   const r = await api.patch(
     `/locks/${lockId}`,
     { name },
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
+    authWorkspace(token, workspaceId), // <-- V2 Change
   );
   return r.data;
 }
 
-export const listUsers = async token => {
-  const r = await api.get('/users', auth(token));
-  return r.data; 
-};
-
-export const updateUserRole = async (token, userId, role) => {
-  const r = await api.patch(`/users/${userId}/role`, { role }, auth(token));
-  return r.data; 
-};
-
-export async function deleteLock(token, lockId) {
-  const res = await api.delete(`/locks/${lockId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function deleteLock(token, workspaceId, lockId) {
+  const res = await api.delete(
+    `/locks/${lockId}`,
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
   return res.data;
 }
 
-export const deleteUser = async (token, userId) => {
-  const r = await api.delete(`/users/${userId}`, auth(token));
-  return r.data; 
-};
-
-export async function patchLock(token, lockId, body) {
-  const res = await api.patch(`/locks/${lockId}`, body, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function patchLock(token, workspaceId, lockId, body) {
+  const res = await api.patch(
+    `/locks/${lockId}`,
+    body,
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
   return res.data;
 }
+
+// --- ACL ROUTES (ALL CHANGED) ---
+export const rebuildAcl = async (token, workspaceId, lockId) => {
+  const r = await api.post(
+    `/locks/${lockId}/acl/rebuild`,
+    {},
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
+  return r.data;
+};
+
+export const fetchLatestAcl = async (token, workspaceId, lockId) => {
+  const r = await api.get(
+    `/locks/${lockId}/acl/latest`,
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
+  return r.data;
+};
+
+// --- USER MANAGEMENT ROUTES (ALL CHANGED) ---
+export const listUsers = async (token, workspaceId) => {
+  const r = await api.get('/users', authWorkspace(token, workspaceId)); // <-- V2 Change
+  return r.data;
+};
+
+export const updateUserRole = async (token, workspaceId, userId, role) => {
+  const r = await api.patch(
+    `/users/${userId}/role`,
+    { role },
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
+  return r.data;
+};
+
+export const deleteUser = async (token, workspaceId, userId) => {
+  const r = await api.delete(
+    `/users/${userId}`,
+    authWorkspace(token, workspaceId), // <-- V2 Change
+  );
+  return r.data;
+};

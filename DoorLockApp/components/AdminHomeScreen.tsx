@@ -6,36 +6,72 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
 import { useAuth } from '../auth/AuthContext';
 
+import DropDownPicker from 'react-native-dropdown-picker';
+import { useState } from 'react';
+
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function AdminHomeScreen() {
   const nav = useNavigation<Nav>();
-  const { email, signOut } = useAuth();
+  const { user, signOut, activeWorkspace, switchWorkspace, isLoading } =
+    useAuth();
+    const [open, setOpen] = useState(false);
+
+    const items =
+      user?.workspaces.map(w => ({
+        label: w.name || `Workspace ${w.workspace_id.slice(-4)}`, 
+        value: w.workspace_id,
+      })) || [];
 
   return (
     <SafeAreaView style={s.container}>
       <View style={s.header}>
         <Text style={s.title}>Admin Dashboard</Text>
-        <Text style={s.subtitle}>{email}</Text>
+        <Text style={s.subtitle}>{user?.email}</Text>
+      </View>
+
+      <View style={{ zIndex: 1000 }}>
+        <Text style={s.label}>Active Workspace</Text>
+        <DropDownPicker
+          open={open}
+          value={activeWorkspace?.workspace_id || null}
+          items={items}
+          setOpen={setOpen}
+          setValue={callback => {
+            const newId = callback();
+            if (newId) {
+              switchWorkspace(newId);
+            }
+          }}
+          style={s.dropdown}
+          textStyle={{ color: 'white' }}
+          dropDownContainerStyle={s.dropdownContainer}
+          placeholder="Select a workspace"
+          loading={isLoading}
+        />
       </View>
 
       <View style={s.grid}>
-        {/* Manage Locks */}
         <TouchableOpacity
           style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('LocksHome')}
         >
-          
           <Text style={s.cardTitle}>Manage Locks</Text>
           <Text style={s.desc}>View, rename, and manage lock access</Text>
         </TouchableOpacity>
 
-        {/* Manage Users */}
+        <TouchableOpacity
+          style={s.card}
+          onPress={() => nav.navigate('GlobalGroups')}
+        >
+          <Text style={s.cardTitle}>Manage User Groups</Text>
+          <Text style={s.desc}>Create groups and add/remove users.</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('UserManagement')}
         >
-          
           <Text style={s.cardTitle}>Manage Users</Text>
           <Text style={s.desc}>View users and assign admin roles</Text>
         </TouchableOpacity>
@@ -105,5 +141,19 @@ const s = StyleSheet.create({
   signOutText: {
     color: '#ff5c5c',
     fontWeight: '600',
+  },
+  label: {
+    color: '#aaa',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  dropdown: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
+    marginBottom: 20,
+  },
+  dropdownContainer: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
   },
 });

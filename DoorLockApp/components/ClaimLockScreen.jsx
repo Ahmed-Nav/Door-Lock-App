@@ -10,13 +10,15 @@ import {
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../auth/AuthContext';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { claimLockOnServer } from '../services/apiService';
+import { claimFirstLock, claimExistingLock } from '../services/apiService';
 import { getOrCreateDeviceKey, saveClaimContext } from '../lib/keys';
 
 export default function ClaimLockScreen() {
-  const { token, role, email } = useAuth();
+  const { token, activeWorkspace, onSignIn } = useAuth();
   const route = useRoute();
   const navigation = useNavigation();
+
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
 
   const [claimMode, setClaimMode] = useState(null);
   const [status, setStatus] = useState('Idle');
@@ -51,37 +53,41 @@ export default function ClaimLockScreen() {
       return;
     }
 
+    const isNewUser = !activeWorkspace;
+
+    if (isNewUser && !newWorkspaceName.trim()) {
+      Toast.show({ type: 'error', text1: 'Workspace name is required' });
+      return;
+    }
+
     try {
-      if (role !== 'admin') {
-        Toast.show({
-          type: 'error',
-          text1: 'Forbidden',
-          text2: 'Only Admins can claim locks.',
-        });
-        return;
-      }
       setStatus('Claiming on server…');
       const { pubB64, kid } = await getOrCreateDeviceKey();
-      const res = await claimLockOnServer(token, {
-        lockId: Number(lockIdToClaim),
-        claimCode: claimCodeToClaim.trim(),
-        kid,
-      });
+
+      let res;
+      if (isNewUser) {
+        res = await claimFirstLock(token, {
+          lockId: Number(lockIdToClaim),
+          claimCode: claimCodeToClaim.trim(),
+          kid,
+          newWorkspaceName: newWorkspaceName.trim(),
+        });
+      } else {
+        res = await claimExistingLock(token, activeWorkspace.workspace_id, {
+          lockId: Number(lockIdToClaim),
+          claimCode: claimCodeToClaim.trim(),
+          kid,
+        });
+      }
 
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
 
       setStatus('Claimed');
-      Toast.show({
-        type: 'success',
-        text1: 'Claimed',
-        text2: `Lock ${lockIdToClaim} claimed on server.`,
-      });
+      Toast.show({ type: 'success', text1: 'Claimed' });
 
-      await saveClaimContext({
-        lockId: Number(lockIdToClaim),
-        claimCode: claimCodeToClaim.trim(),
-        adminPubB64: res.adminPubB64,
-      });
+      if (isNewUser) {
+        await onSignIn(token);
+      }
 
       navigation.replace('Ownership', {
         lockId: Number(lockIdToClaim),
@@ -114,8 +120,19 @@ export default function ClaimLockScreen() {
   const renderClaimForm = () => {
     const isScanMode = claimMode === 'scan' && scannedData;
 
+    const isNewUser = !activeWorkspace;
+
     return (
       <>
+        {isNewUser && (
+          <TextInput
+            style={[s.in, s.editableInput]}
+            placeholder="Your Workspace Name (e.g. My Home)"
+            value={newWorkspaceName}
+            onChangeText={setNewWorkspaceName}
+            placeholderTextColor="#888"
+          />
+        )}
         <TextInput
           style={[s.in, !isScanMode && s.editableInput]}
           placeholder="Lock ID"
@@ -214,7 +231,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
   in: {
-    backgroundColor: '#333', 
+    backgroundColor: '#333',
     color: '#999',
     borderRadius: 10,
     padding: 12,

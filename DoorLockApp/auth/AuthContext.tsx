@@ -12,27 +12,43 @@ import * as Keychain from 'react-native-keychain';
 import { getMe } from '../services/apiService';
 import { registerDeviceKeyWithServer } from '../lib/keys';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type Role = 'admin' | 'user' | null;
+type WorkspaceRole = 'owner' | 'admin' | 'user';
+
+type Workspace = {
+  workspace_id: string;
+  role: WorkspaceRole;
+};
+
+type User = {
+  id: string;
+  email: string;
+  workspaces: Workspace[];
+};
 
 type AuthState = {
   token: string | null;
-  role: Role;
+  user: User | null;
+  activeWorkspace: Workspace | null;
+  role: WorkspaceRole | null;
   email: string | null;
   loading: boolean;
-  signInAdmin: () => Promise<void>;
-  signInUser: () => Promise<void>;
+  signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
 };
 
 const AuthCtx = createContext<AuthState>({
   token: null,
+  user: null,
+  activeWorkspace: null,
   role: null,
   email: null,
   loading: true,
-  signInAdmin: async () => {},
-  signInUser: async () => {},
+  signIn: async () => {},
   signOut: async () => {},
+  switchWorkspace: async () => {},
 });
 
 export const useAuth = () => useContext(AuthCtx);
@@ -40,11 +56,10 @@ export const useAuth = () => useContext(AuthCtx);
 // ── Your existing Clerk OIDC values (unchanged)
 const ISSUER = 'https://moving-ferret-78.clerk.accounts.dev';
 const REDIRECT_URL = 'com.doorlockapp://callback';
-const ADMIN_CLIENT_ID = '5si8xSwPl6n2oQLY';
-const USER_CLIENT_ID = '2JbPx2I2fknWbmf8';
+const CLIENT_ID = '2JbPx2I2fknWbmf8';
 
-const cfg = (clientId: string): AuthConfiguration => ({
-  clientId,
+const authConfig: AuthConfiguration = {
+  clientId:CLIENT_ID,
   redirectUrl: REDIRECT_URL,
   scopes: ['openid', 'email', 'profile'],
   serviceConfiguration: {
@@ -56,7 +71,7 @@ const cfg = (clientId: string): AuthConfiguration => ({
     prompt: 'login',
     max_age: '0',
   },
-});
+};
 
 function decodeEmail(idToken?: string | null) {
   try {
@@ -66,28 +81,23 @@ function decodeEmail(idToken?: string | null) {
   }
 }
 
-const KC_SERVICE = 'doorlock-auth-v1';
+const KC_SERVICE = 'doorlock-auth-v2';
+const KC_LAST_WORKSPACE_KEY = 'doorlock-last-workspace-v2';
 
-type SavedSession = { token: string; role: Role; email: string | null };
 
-async function saveSession(s: SavedSession) {
-  await Keychain.setGenericPassword('session', JSON.stringify(s), {
+async function saveToken(token: string) {
+  await Keychain.setGenericPassword('session', token, {
     service: KC_SERVICE,
     accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
   });
 }
 
-async function loadSession(): Promise<SavedSession | null> {
+async function loadToken(): Promise<string | null> {
   const c = await Keychain.getGenericPassword({ service: KC_SERVICE });
-  if (!c) return null;
-  try {
-    return JSON.parse(c.password) as SavedSession;
-  } catch {
-    return null;
-  }
+  return c ? c.password : null;
 }
 
-async function clearSession() {
+async function clearToken() {
   try {
     await Keychain.resetGenericPassword({ service: KC_SERVICE });
   } catch {}
@@ -97,21 +107,92 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [token, setToken] = useState<string | null>(null);
-  const [role, setRole] = useState<Role>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(
+    null,
+  );
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const signOut = async () => {
+    setLoading(true);
+    try {
+      if (token) {
+        await revoke(authConfig, {
+          tokenToRevoke: token,
+          sendClientId: true,
+        }).catch(() => {});
+      }
+    } finally {
+      await clearToken();
+      setToken(null);
+      setUser(null);
+      setActiveWorkspace(null);
+      setEmail(null);
+      setLoading(false);
+    }
+  };
+
+  const loadAppData = async (authToken: string) => {
+    try {
+      const { ok, user: apiUser } = await getMe(authToken);
+      if (!ok) throw new Error('Failed to get user');
+
+      setUser(apiUser);
+      setEmail(apiUser.email);
+
+      // Check if they have any workspaces
+      if (apiUser.workspaces && apiUser.workspaces.length > 0) {
+        let workspaceToSet: Workspace | null = null;
+        const lastId = await AsyncStorage.getItem(KC_LAST_WORKSPACE_KEY);
+
+        if (lastId) {
+          // Fix for 'any' type: explicitly type 'w' as Workspace
+          workspaceToSet = apiUser.workspaces.find(
+            (w: Workspace) => w.workspace_id === lastId,
+          );
+        }
+
+        // If no valid lastId, default to the first workspace
+        if (!workspaceToSet) {
+          workspaceToSet = apiUser.workspaces[0];
+        }
+
+        // --- THIS IS THE FIX for the 'possibly null' error ---
+        // We must check if workspaceToSet is *still* valid before using it
+        if (workspaceToSet) {
+          setActiveWorkspace(workspaceToSet);
+          // And we only set storage if it's a valid object
+          await AsyncStorage.setItem(
+            KC_LAST_WORKSPACE_KEY,
+            workspaceToSet.workspace_id,
+          );
+        } else {
+          // This is a safety fallback
+          setActiveWorkspace(null);
+          await AsyncStorage.removeItem(KC_LAST_WORKSPACE_KEY);
+        }
+        // --- END OF FIX ---
+      } else {
+        // This is a new user with no workspaces
+        setActiveWorkspace(null);
+        await AsyncStorage.removeItem(KC_LAST_WORKSPACE_KEY);
+      }
+    } catch (e) {
+      console.error('Failed to load app data:', e);
+      // If load fails (e.g., token expired), sign them out
+      await signOut(); // Make sure signOut is defined or available here
+    }
+  };
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const sess = await loadSession();
-        if (sess?.token) {
-          setToken(sess.token);
-          setEmail(sess.email ?? decodeEmail(sess.token));
-
-          const me = await getMe(sess.token).catch(() => null);
-          setRole(me?.user?.role ?? sess.role ?? null);
+        const userToken = await loadToken(); 
+        if (userToken) {
+          setToken(userToken);
+          await loadAppData(userToken); 
         }
       } finally {
         setLoading(false);
@@ -119,95 +200,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     })();
   }, []);
 
-  async function doSignIn(clientId: string) {
+  const signIn = async () => {
     setLoading(true);
     let rawToken = null;
     try {
-      const auth = await authorize(cfg(clientId));
-      rawToken =
-        auth.idToken ||
-        auth.accessToken ||
-        (auth as any).id_token ||
-        (auth as any).access_token;
+      const auth = await authorize(authConfig); 
+      rawToken = auth.idToken || auth.accessToken;
       if (!rawToken) throw new Error('No token from IdP');
 
-      const emailFromToken = decodeEmail(rawToken);
       setToken(rawToken);
-      setEmail(emailFromToken);
-
-      const me = await getMe(rawToken).catch(error => {
-        if (
-          clientId === ADMIN_CLIENT_ID &&
-          (error?.response?.status === 403 || error?.response?.status === 401)
-        ) {
-          Toast.show({
-            type: 'error',
-            text1: 'Access Denied',
-            text2: 'You do not have administrative privileges.',
-          });
-        }
-        return null;
-      });
-      const resolvedRole: Role = me?.user?.role ?? null;
-      setRole(resolvedRole);
-
-      if (!resolvedRole) {
-        throw new Error('Role resolution failed');
-      }
-
+      await saveToken(rawToken); 
+      await loadAppData(rawToken); 
       try {
         await registerDeviceKeyWithServer(rawToken);
       } catch {}
 
-      await saveSession({
-        token: rawToken,
-        role: resolvedRole,
-        email: emailFromToken ?? null,
-      });
     } catch (e) {
       console.error('signIn failed:', e);
       if (rawToken) {
-        // Attempt to revoke the token we just received
-        await revoke(
-          { ...cfg(clientId) },
-          { tokenToRevoke: rawToken, sendClientId: true },
-        ).catch(() => {});
+        await revoke(authConfig, { tokenToRevoke: rawToken, sendClientId: true }).catch(() => {});
       }
-      await clearSession();
+      await clearToken();
       setToken(null);
-      setRole(null);
+      setUser(null);
+      setActiveWorkspace(null);
       setEmail(null);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  const signInAdmin = () => doSignIn(ADMIN_CLIENT_ID);
-  const signInUser = () => doSignIn(USER_CLIENT_ID);
+  const switchWorkspace = async (workspaceId: string) => {
+    if (!user) return;
+    const newWorkspace = user.workspaces.find(
+      w => w.workspace_id === workspaceId,
+    );
 
-  const signOut = async () => {
-    setLoading(true);
-    try {
-      if (token) {
-        await revoke(
-          {
-            ...cfg(role === 'admin' ? ADMIN_CLIENT_ID : USER_CLIENT_ID),
-          },
-          { tokenToRevoke: token, sendClientId: true },
-        ).catch(() => {});
-      }
-    } finally {
-      await clearSession(); // your Keychain wipe
-      setToken(null);
-      setRole(null);
-      setEmail(null);
+    if (newWorkspace) {
+      setLoading(true); // Show loading while app data re-fetches
+      setActiveWorkspace(newWorkspace);
+      await AsyncStorage.setItem(
+        KC_LAST_WORKSPACE_KEY,
+        newWorkspace.workspace_id,
+      );
+      // Components will now see the new activeWorkspace and can re-fetch data
       setLoading(false);
     }
   };
 
   const value = useMemo(
-    () => ({ token, role, email, loading, signInAdmin, signInUser, signOut }),
-    [token, role, email, loading],
+    () => ({
+      token,
+      user,
+      activeWorkspace,
+      role: activeWorkspace?.role || null, // V2: Role is derived
+      email,
+      loading,
+      signIn, // V2: Expose single 'signIn'
+      signOut,
+      switchWorkspace,
+    }),
+    [token, user, activeWorkspace, email, loading],
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
