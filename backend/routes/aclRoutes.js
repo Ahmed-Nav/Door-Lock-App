@@ -1,20 +1,25 @@
-// backend/routes/aclRoutes.js (excerpt)
 const express = require("express");
 const { connectDB } = require("../services/db");
 const rateLimit = require("express-rate-limit");
-
-const limiter = rateLimit({ windowMs: 60_000, max: 120 });
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/requireRole");
+
+
+const { requireAdmin } = require("../middleware/requireRoleInWorkspace");
+const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
+
 const { buildAndStore } = require("../services/aclBuildService");
 const { parseLockId } = require("../middleware/validate");
+const AclVersion = require("../models/AclVersion");
 
 const router = express.Router();
+const limiter = rateLimit({ windowMs: 60_000, max: 120 });
 
 router.post(
-  "/locks/:lockId/acl/rebuild", limiter,
+  "/locks/:lockId/acl/rebuild",
+  limiter,
   verifyClerkOidc,
-  requireAdmin,
+  extractActiveWorkspace, 
+  requireAdmin, 
   async (req, res, next) => {
     try {
       await connectDB();
@@ -22,9 +27,10 @@ router.post(
       if (!lockId)
         return res.status(400).json({ ok: false, err: "bad-lockId" });
 
-      const envelope = await buildAndStore(lockId);
+      const envelope = await buildAndStore(lockId, req.workspaceId);
+
       return res.json({ ok: true, envelope });
-    }  catch (e) {
+    } catch (e) {
       if (e.code === "MISSING_USERPUBS") {
         e.status = 409;
       }
@@ -36,7 +42,8 @@ router.post(
 router.get(
   "/locks/:lockId/acl/latest",
   verifyClerkOidc,
-  requireAdmin,
+  extractActiveWorkspace, 
+  requireAdmin, 
   async (req, res, next) => {
     try {
       await connectDB();
@@ -44,12 +51,15 @@ router.get(
       if (!lockId)
         return res.status(400).json({ ok: false, err: "bad-lockId" });
 
-      const AclVersion = require("../models/AclVersion");
-      const doc = await AclVersion.findOne({ lockId })
+      const doc = await AclVersion.findOne({
+        lockId: lockId,
+        workspace_id: req.workspaceId, 
+      })
         .sort({ version: -1 })
         .lean();
+
       if (!doc) {
-        const e = new Error("no-acl");
+        const e = new Error("no-acl-found-in-workspace");
         e.code = "NOT_FOUND";
         e.status = 404;
         throw e;
@@ -60,7 +70,6 @@ router.get(
       console.error("GET /locks/:lockId/acl/latest failed:", e);
       return res.status(500).json({ ok: false, err: "server-error" });
     }
-    next(e);
   }
 );
 

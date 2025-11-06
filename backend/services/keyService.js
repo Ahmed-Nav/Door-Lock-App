@@ -56,26 +56,57 @@ function generateP256KeyPairPEM() {
   return { privPem, pubB64: pubRaw.toString("base64") };
 }
 
-async function getOrCreateLockKey(lockId) {
-  let doc = await LockKey.findOne({ lockId, active: true }).lean();
+async function getOrCreateLockKey(lockId, workspaceId) {
+  if (!lockId || !workspaceId) {
+    throw new Error(
+      "lockId and workspaceId are required for Creating Lock Key"
+    );
+  }
+
+  let doc = await LockKey.findOne({
+    lockId: lockId,
+    workspace_id: workspaceId,
+    active: true,
+  }).lean();
   if (doc) return doc;
 
   const { privPem, pubB64 } = generateP256KeyPairPEM();
   const { encB64, ivB64 } = aesGcmEncrypt(Buffer.from(privPem, "utf8"));
 
-  doc = await LockKey.create({
-    lockId,
-    adminPubB64: pubB64,
-    adminPrivEnc: encB64,
-    adminPrivIv: ivB64,
-    alg: "P-256",
-    active: true,
-  });
-  return doc.toObject();
+  try {
+    doc = await LockKey.create({
+      lockId: lockId,
+      workspace_id: workspaceId,
+      adminPubB64: pubB64,
+      adminPrivEnc: encB64,
+      adminPrivIv: ivB64,
+      alg: "P-256",
+      active: true,
+    });
+    return doc.toObject();
+  } catch (e) {
+    if (e.code === 11000) {
+      return await LockKey.findOne({
+        lockId: lockId,
+        workspace_id: workspaceId,
+        active: true,
+      }).lean();
+    }
+    throw e;
+  }
 }
 
-async function getActiveKey(lockId) {
-  const doc = await LockKey.findOne({ lockId, active: true }).lean();
+async function getActiveKey(lockId, workspaceId) {
+
+  if (!lockId || !workspaceId) {
+    throw new Error("lockId and workspaceId are required for getting Active Key");
+  }
+
+  const doc = await LockKey.findOne({
+    lockId: lockId,
+    workspace_id: workspaceId,
+    active: true,
+  }).lean();
   if (!doc) return null;
   const privPem = aesGcmDecrypt(doc.adminPrivEnc, doc.adminPrivIv).toString(
     "utf8"

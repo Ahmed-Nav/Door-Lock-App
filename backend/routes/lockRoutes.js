@@ -1,49 +1,59 @@
-// backend/routes/lockRoutes.js
 const express = require("express");
 const router = express.Router();
-
 const { connectDB } = require("../services/db");
-const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/requireRole");
 const Lock = require("../models/Lock");
-
 const AclVersion = require("../models/AclVersion");
 const LockKey = require("../models/LockKey");
 const Group = require("../models/Group");
-
-router.get("/locks", verifyClerkOidc, requireAdmin, async (req, res) => {
-  try {
-    await connectDB();
-
-    
-    const ownerId = req.userId;
-    if (!ownerId)
-      return res.status(401).json({ ok: false, err: "unauthorized" });
-
-    const docs = await Lock.find({ claimed: true })
-      .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
-      .lean();
-
-    const locks = (docs || []).map((d) => ({
-      lockId: d.lockId,
-      name: d.name || `Lock #${d.lockId}`,
-      claimed: !!d.claimed,
-      setupComplete: !!d.setupComplete,
-    }));
+const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 
 
-    return res.json({ ok: true, locks });
-  } catch (e) {
-    console.error("GET /api/locks failed:", e?.stack || e);
-    return res.status(500).json({ ok: false, err: "server-error" });
+const {
+  requireAdmin,
+  requireUser,
+} = require("../middleware/requireRoleInWorkspace");
+const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
+
+
+
+router.get(
+  "/locks",
+  verifyClerkOidc,
+  extractActiveWorkspace, 
+  requireAdmin, 
+  async (req, res) => {
+    try {
+      await connectDB();
+
+
+      const docs = await Lock.find({
+        workspace_id: req.workspaceId,
+        claimed: true,
+      })
+        .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
+        .lean();
+
+      const locks = (docs || []).map((d) => ({
+        lockId: d.lockId,
+        name: d.name || `Lock #${d.lockId}`,
+        claimed: !!d.claimed,
+        setupComplete: !!d.setupComplete,
+      }));
+
+      return res.json({ ok: true, locks });
+    } catch (e) {
+      console.error("GET /api/locks failed:", e?.stack || e);
+      return res.status(500).json({ ok: false, err: "server-error" });
+    }
   }
-});
+);
 
 
 router.patch(
   "/locks/:lockId",
   verifyClerkOidc,
-  requireAdmin,
+  extractActiveWorkspace, 
+  requireAdmin, 
   async (req, res) => {
     try {
       await connectDB();
@@ -58,8 +68,9 @@ router.patch(
       if (typeof req.body?.setupComplete === "boolean")
         updates.setupComplete = req.body.setupComplete;
 
+
       const doc = await Lock.findOneAndUpdate(
-        { lockId },
+        { lockId: lockId, workspace_id: req.workspaceId }, 
         { $set: updates },
         { new: true }
       ).lean();
@@ -67,7 +78,7 @@ router.patch(
       if (!doc) {
         return res
           .status(404)
-          .json({ ok: false, err: "not-found-or-not-owner" });
+          .json({ ok: false, err: "not-found-in-workspace" });
       }
       return res.json({ ok: true, lock: doc });
     } catch (e) {
@@ -77,50 +88,62 @@ router.patch(
   }
 );
 
-router.get('/locks/my', verifyClerkOidc, async (req, res) => {
-  try {
-    await connectDB();
 
-    const userId = req.dbUser?._id;
-    if (!userId) {
-      return res.status(401).json({ ok: false, err: 'unauthorized' });
+router.get(
+  "/locks/my",
+  verifyClerkOidc,
+  extractActiveWorkspace, 
+  requireUser, 
+  async (req, res) => {
+    try {
+      await connectDB();
+
+      if (!req.userId) {
+        return res.status(401).json({ ok: false, err: "unauthorized" });
+      }
+
+
+      const userGroups = await Group.find({
+        userIds: req.userId,
+        workspace_id: req.workspaceId, 
+      }).lean();
+
+      const myLockIds = new Set();
+      for (const group of userGroups) {
+        group.lockIds.forEach((id) => myLockIds.add(id));
+      }
+      const lockIdArray = Array.from(myLockIds);
+
+
+      const docs = await Lock.find({
+        lockId: { $in: lockIdArray },
+        workspace_id: req.workspaceId, 
+        claimed: true,
+      })
+        .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
+        .lean();
+
+      const locks = (docs || []).map((d) => ({
+        lockId: d.lockId,
+        name: d.name || `Lock #${d.lockId}`,
+        claimed: !!d.claimed,
+        setupComplete: !!d.setupComplete,
+      }));
+
+      return res.json({ ok: true, locks });
+    } catch (e) {
+      console.error("GET /api/locks/my failed:", e?.stack || e);
+      return res.status(500).json({ ok: false, err: "server-error" });
     }
-
-    const userGroups = await Group.find({ userIds: userId }).lean();
-
-    const myLockIds = new Set();
-    for (const group of userGroups) {
-      group.lockIds.forEach(id => myLockIds.add(id));
-    }
-    const lockIdArray = Array.from(myLockIds);
-
-    const docs = await Lock.find({
-      lockId: { $in: lockIdArray },
-      claimed: true,
-    })
-      .select({ _id: 0, lockId: 1, name: 1, claimed: 1, setupComplete: 1 })
-      .lean();
-
-    const locks = (docs || []).map((d) => ({
-      lockId: d.lockId,
-      name: d.name || `Lock #${d.lockId}`,
-      claimed: !!d.claimed,
-      setupComplete: !!d.setupComplete,
-    }));
-
-    return res.json({ ok: true, locks });
-
-  } catch (e) {
-    console.error('GET /api/locks/my failed:', e?.stack || e);
-    return res.status(500).json({ ok: false, err: 'server-error' });
   }
-});
+);
 
 
 router.delete(
   "/locks/:lockId",
   verifyClerkOidc,
-  requireAdmin,
+  extractActiveWorkspace, 
+  requireAdmin, 
   async (req, res) => {
     try {
       await connectDB();
@@ -128,14 +151,29 @@ router.delete(
       if (!Number.isFinite(lockId))
         return res.status(400).json({ ok: false, err: "bad-lockId" });
 
-      const lock = await Lock.findOne({ lockId }).lean();
-      if (!lock) return res.status(404).json({ ok: false, err: "not-found" });
+      
+      const lock = await Lock.findOne({
+        lockId: lockId,
+        workspace_id: req.workspaceId, 
+      }).lean();
 
+      if (!lock)
+        return res
+          .status(404)
+          .json({ ok: false, err: "not-found-in-workspace" });
+
+      
       await Promise.all([
-        AclVersion.deleteMany({ lockId }),
-        LockKey.deleteMany({ lockId }),
-        Group.updateMany({}, { $pull: { lockIds: lockId } }),
-        Lock.deleteOne({ lockId }),
+        AclVersion.deleteMany({
+          lockId: lockId,
+          workspace_id: req.workspaceId,
+        }), 
+        LockKey.deleteMany({ lockId: lockId, workspace_id: req.workspaceId }), 
+        Group.updateMany(
+          { workspace_id: req.workspaceId }, 
+          { $pull: { lockIds: lockId } }
+        ),
+        Lock.deleteOne({ lockId: lockId, workspace_id: req.workspaceId }), 
       ]);
 
       res.json({ ok: true });
@@ -145,8 +183,5 @@ router.delete(
     }
   }
 );
-
-
-
 
 module.exports = router;
