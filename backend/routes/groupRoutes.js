@@ -131,4 +131,31 @@ router.get(
   }
 );
 
+
+router.delete(
+  "/:groupId",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      await connectDB();
+      const group = await Group.findOneAndDelete({
+        _id: req.params.groupId,
+        workspace_id: req.workspaceId,
+      });
+
+      if (!group) {
+        return res.status(404).json({ ok: false, err: "group-not-found" });
+      }
+
+      res.json({ ok: true });
+    } catch (e) {
+      console.log(e);
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
+
 module.exports = router;
+

@@ -186,7 +186,7 @@ export default function GroupDetail() {
       <Text style={s.t2}>Users</Text>
       <FlatList
         data={g.users}
-        keyExtractor={u => u.id}
+        keyExtractor={u => u._id}
         renderItem={({ item }) => (
           <View style={s.rowItem}>
             <Text style={s.rowText}>{item.email}</Text>
