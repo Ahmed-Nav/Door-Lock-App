@@ -4,7 +4,7 @@ const rateLimit = require("express-rate-limit");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 
 
-const { requireAdmin } = require("../middleware/requireRoleInWorkspace");
+const { requireAdmin, requireOwner } = require("../middleware/requireRoleInWorkspace");
 const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 
 const { buildAndStore } = require("../services/aclBuildService");
@@ -20,6 +20,7 @@ router.post(
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
+  requireOwner,
   async (req, res, next) => {
     try {
       await connectDB();
@@ -44,6 +45,7 @@ router.get(
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
+  requireOwner,
   async (req, res, next) => {
     try {
       await connectDB();

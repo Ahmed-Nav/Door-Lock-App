@@ -7,7 +7,7 @@ const { Clerk } = require("@clerk/clerk-sdk-node");
 const { jose, jwtVerify, createRemoteJWKSet } = require("jose");
 
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/requireRoleInWorkspace");
+const { requireAdmin, requireOwner } = require("../middleware/requireRoleInWorkspace");
 const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 const { bad } = require("../middleware/validate");
 
@@ -24,6 +24,7 @@ router.post(
   verifyClerkOidc,
   extractActiveWorkspace,
   requireAdmin,
+  requireOwner,
   async (req, res, next) => {
     try {
       const { email, role } = req.body;

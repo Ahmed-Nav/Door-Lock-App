@@ -9,6 +9,7 @@ const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 
 
 const {
+  requireOwner,
   requireAdmin,
   requireUser,
 } = require("../middleware/requireRoleInWorkspace");
@@ -21,6 +22,7 @@ router.get(
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
+  requireOwner,
   async (req, res) => {
     try {
       await connectDB();
@@ -54,6 +56,7 @@ router.patch(
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
+  requireOwner,
   async (req, res) => {
     try {
       await connectDB();
@@ -144,6 +147,7 @@ router.delete(
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
+  requireOwner,
   async (req, res) => {
     try {
       await connectDB();

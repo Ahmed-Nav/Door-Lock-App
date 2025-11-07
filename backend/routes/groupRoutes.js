@@ -7,6 +7,7 @@ const User = require("../models/User");
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 
 const {
+  requireOwner,
   requireAdmin,
   requireUser,
 } = require("../middleware/requireRoleInWorkspace");
@@ -36,6 +37,7 @@ router.post(
   verifyClerkOidc,
   extractActiveWorkspace,
   requireAdmin, 
+  requireOwner,
   async (req, res) => {
     try {
       const { name } = req.body;
@@ -69,6 +71,7 @@ router.post(
   verifyClerkOidc,
   extractActiveWorkspace,
   requireAdmin,
+  requireOwner,
   async (req, res) => {
     try {
       const { userEmail } = req.body;

@@ -199,7 +199,7 @@ export default function LocksHomeScreen() {
         </View>
 
         <View style={{ gap: 6 }}>
-          {role === 'admin' && item.claimed && !item.setupComplete && (
+          {role === 'admin' || role === 'owner' && item.claimed && !item.setupComplete && (
             <TouchableOpacity
               style={[s.smallBtn, { backgroundColor: '#7B1FA2' }]}
               onPress={() => goResume(item.lockId)}

@@ -1,6 +1,9 @@
 const router = require("express").Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
-const { requireAdmin } = require("../middleware/requireRoleInWorkspace");
+const {
+  requireAdmin,
+  requireOwner,
+} = require("../middleware/requireRoleInWorkspace");
 const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 
 
@@ -25,6 +28,7 @@ router.get(
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
+  requireOwner,
   async (req, res) => {
     try {
       const pub = (process.env.ADMIN_PUB_RAW_B64 || "").trim();
