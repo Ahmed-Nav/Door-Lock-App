@@ -68,7 +68,7 @@ export default function GlobalGroupsScreen() {
   const { token, role, activeWorkspace } = useAuth();
   const nav = useNavigation();
   const [groups, setGroups] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
 
@@ -94,7 +94,6 @@ export default function GlobalGroupsScreen() {
         await load();
       }
       fetchData();
-
       return () => {};
     }, [load]),
   );
