@@ -85,9 +85,15 @@ export default function ClaimLockScreen() {
       setStatus('Claimed');
       Toast.show({ type: 'success', text1: 'Claimed' });
 
-      if (isNewUser) {
-        await signIn(token);
+      if (isNewUser && res.workspace) {
+        await signIn(token, res.workspace);
       }
+
+      await saveClaimContext({
+        lockId: Number(lockIdToClaim),
+        claimCode: claimCodeToClaim.trim(),
+        adminPubB64: res.adminPubB64,
+      });
 
       navigation.replace('Ownership', {
         lockId: Number(lockIdToClaim),

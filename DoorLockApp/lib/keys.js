@@ -91,9 +91,11 @@ export async function saveClaimContext(ctx) {
 
 export async function loadClaimContext(lockId) {
   try {
-    const res = await Keychain.getGenericPassword({ service: CLAIM_SERVICE });
+    const res = await Keychain.getGenericPassword({
+      service: CLAIM_SERVICE,
+      username: String(lockId),
+    });
     if (!res) return null;
-    if (res.username !== String(lockId)) return null;
     return JSON.parse(res.password);
   } catch {
     return null;

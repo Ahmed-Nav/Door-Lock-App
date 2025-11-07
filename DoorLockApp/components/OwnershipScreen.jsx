@@ -21,7 +21,7 @@ import Toast from 'react-native-toast-message';
 export default function OwnershipScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { token } = useAuth();
+  const { token, activeWorkspace } = useAuth();
 
   const initialLockId = useMemo(
     () => (route?.params?.lockId ? String(route.params.lockId) : '101'),
@@ -54,7 +54,7 @@ export default function OwnershipScreen() {
           return;
         }
         
-        const r = await getAdminPub(token);
+        const r = await getAdminPub(token, activeWorkspace?.workspace_id);
 
         console.log('Fetched admin pub from server:', r);
 
