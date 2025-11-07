@@ -42,7 +42,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api", claimRoutes);
 app.use("/api", aclRoutes);
-app.use("/api", groupRoutes);
+app.use("/api/groups", groupRoutes);
 app.use("/api", keyRoutes);
 app.use("/api", mfgRoutes);
 app.use("/api", lockRoutes);
