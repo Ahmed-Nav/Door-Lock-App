@@ -73,15 +73,19 @@ export default function GlobalGroupsScreen() {
   const [newGroupName, setNewGroupName] = useState('');
 
   const load = useCallback(async () => {
-    if (role !== 'admin' || !activeWorkspace) {
+    console.log('GlobalGroupsScreen: role:', role, 'activeWorkspace:', activeWorkspace);
+        if ((role !== 'admin' && role !== 'owner') || !activeWorkspace) {
       setGroups([]);
+      console.log('GlobalGroupsScreen: Not admin or no active workspace, skipping group fetch.');
       return;
     }
     try {
       setLoading(true);
       const res = await listGroups(token, activeWorkspace.workspace_id);
+      console.log('GlobalGroupsScreen: listGroups response:', res);
       setGroups(res?.groups || []);
     } catch (e) {
+      console.error('GlobalGroupsScreen: Error loading groups:', e);
       Toast.show({ type: 'error', text1: 'Error loading groups' });
     } finally {
       setLoading(false);

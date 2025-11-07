@@ -17,15 +17,16 @@ import {
   addUserToGroup,
   removeUserFromGroup,
   deleteGroup,
-  listUsers,
+  listUsers
 } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 export default function GroupDetail() {
-  const { token } = useAuth();
+  const { token, activeWorkspace } = useAuth();
   const route = useRoute<any>();
   const nav = useNavigation();
   const groupId = route.params?.groupId;
+  console.log('GroupDetail: route.params:', route.params);
 
   const [g, setG] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -36,14 +37,24 @@ export default function GroupDetail() {
   const [userOptions, setUserOptions] = useState<{ label: string; value: string }[]>([]);
  
   const load = useCallback(async () => {
+    console.log('GroupDetail: load start');
+    if (!token || !activeWorkspace || !groupId) {
+      setLoading(false);
+      console.log('GroupDetail: load end (no token/workspace/groupId)');
+      return;
+    }
     setLoading(true);
     try {
-      const d = await getGroup(token, groupId);
+      const d = await getGroup(token, activeWorkspace.workspace_id, groupId);
+      console.log('GroupDetail: getGroup response', d);
       setG(d.group);
+    } catch (e) {
+      console.error('GroupDetail: getGroup failed', e);
     } finally {
       setLoading(false);
+      console.log('GroupDetail: load end');
     }
-  }, [token, groupId]);
+  }, [token, activeWorkspace, groupId]);
 
   useEffect(() => {
     load();
@@ -51,11 +62,13 @@ export default function GroupDetail() {
 
   
   const loadDropdowns = useCallback(async () => {
+    if (!token || !activeWorkspace || !g) return;
   try {
-    const usersRes = await listUsers(token);
+    const [usersRes] = await Promise.all([
+      listUsers(token, activeWorkspace.workspace_id)
+    ]);
 
     const groupUsers = g?.users?.map((u: any) => u.email) || [];
-    const groupLocks = g?.lockIds || [];
 
     const usersArray = Array.isArray(usersRes)
       ? usersRes
@@ -71,7 +84,7 @@ export default function GroupDetail() {
   } catch (e) {
     console.warn('Dropdown load failed', e);
   }
-}, [token, g]);
+}, [token, activeWorkspace, g]);
 
   useEffect(() => {
     if (g) loadDropdowns();
@@ -79,9 +92,10 @@ export default function GroupDetail() {
 
   
   const doAddUser = async () => {
-    if (!selectedUser) return Toast.show({ type: 'info', text1: 'Select a user first' }) 
+    if (!selectedUser) return Toast.show({ type: 'info', text1: 'Select a user first' });
+    if (!token || !activeWorkspace) return; 
     try {
-      await addUserToGroup(token, groupId, selectedUser);
+      await addUserToGroup(token, activeWorkspace.workspace_id, groupId, selectedUser);
       setSelectedUser(null);
       await load();
       Toast.show({ type: 'success', text1: 'User Added', text2: `${selectedUser} has been added to the group.` });
@@ -91,8 +105,9 @@ export default function GroupDetail() {
   };
 
   const doRemoveUser = async (userEmail: string) => {
+    if (!token || !activeWorkspace) return;
     try {
-      await removeUserFromGroup(token, groupId, userEmail);
+      await removeUserFromGroup(token, activeWorkspace.workspace_id, groupId, userEmail);
       await load();
       Toast.show({ type: 'success', text1: 'User Removed', text2: `${userEmail} has been removed from the group.` });
     } catch (e) {
@@ -101,6 +116,7 @@ export default function GroupDetail() {
   };
 
   const doDeleteGroup = async () => {
+    if (!token || !activeWorkspace) return;
     Alert.alert('Delete group?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -108,7 +124,7 @@ export default function GroupDetail() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteGroup(token, groupId);
+            await deleteGroup(token, activeWorkspace.workspace_id, groupId);
             nav.goBack();
           } catch (e) {
             Toast.show({ type: 'error', text1: 'Error', text2: String(e?.response?.data?.err || e?.message || e) })
@@ -118,11 +134,19 @@ export default function GroupDetail() {
     ]);
   };
 
-  if (loading || !g) {
+  if (loading) {
     return (
       <View style={s.center}>
         <ActivityIndicator color="#7B1FA2" />
         <Text style={s.loadingText}>Loading…</Text>
+      </View>
+    );
+  }
+
+  if (!g) {
+    return (
+      <View style={s.center}>
+        <Text style={s.loadingText}>Group not found.</Text>
       </View>
     );
   }

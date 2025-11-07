@@ -70,10 +70,9 @@ router.post(
   verifyClerkOidc,
   extractActiveWorkspace,
   requireAdmin,
-  requireOwner,
   async (req, res) => {
     try {
-      const { userEmail } = req.body;
+      const { userEmail, remove } = req.body;
       await connectDB();
 
       const userToAdd = await User.findOne({ email: userEmail }).lean();
@@ -81,9 +80,14 @@ router.post(
         return res.status(404).json({ ok: false, err: "user-not-found" });
       }
 
+      const update = remove
+        ? { $pull: { userIds: userToAdd._id } }
+        : { $addToSet: { userIds: userToAdd._id } };
+
       const group = await Group.findOneAndUpdate(
         { _id: req.params.groupId, workspace_id: req.workspaceId },
-        { $addToSet: { userIds: userToAdd._id } } 
+        update,
+        { new: true }
       );
 
       if (!group) {
@@ -94,6 +98,34 @@ router.post(
 
       res.json({ ok: true });
     } catch (e) {
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
+
+router.get(
+  "/:groupId",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireUser,
+  async (req, res) => {
+    try {
+      await connectDB();
+      const group = await Group.findOne({
+        _id: req.params.groupId,
+        workspace_id: req.workspaceId,
+      })
+        .populate('users')
+        .populate('locks')
+        .lean();
+
+      if (!group) {
+        return res.status(404).json({ ok: false, err: "group-not-found" });
+      }
+
+      res.json({ ok: true, group });
+    } catch (e) {
+      console.log(e);
       res.status(500).json({ ok: false, err: "server-error" });
     }
   }
