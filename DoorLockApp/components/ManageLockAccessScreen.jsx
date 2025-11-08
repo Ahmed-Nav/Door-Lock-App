@@ -28,7 +28,7 @@ import {
 } from '../ble/bleManager';
 
 export default function ManageLockAccessScreen() {
-  const { token, role } = useAuth();
+  const { token, role, activeWorkspace } = useAuth();
   const nav = useNavigation();
   const route = useRoute();
   const ctxLockId = route.params?.lockId ?? null;
@@ -39,16 +39,20 @@ export default function ManageLockAccessScreen() {
   const [updateStatus, setUpdateStatus] = useState('');
 
   const load = useCallback(async () => {
-    if (role !== 'admin' || !ctxLockId) return;
+    if ((role !== 'admin' && role !== 'owner') || !ctxLockId) return;
     try {
-      const res = await listGroups(token);
+      const res = await listGroups(token, activeWorkspace.workspace_id);
       setAllGroups(res?.groups || []);
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Could not load groups' });
     }
-  }, [token, role, ctxLockId]);
+  }, [token, role, ctxLockId, activeWorkspace]);
 
-  useFocusEffect(load);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
 
   const handleToggleGroup = async (group, isEnabled) => {

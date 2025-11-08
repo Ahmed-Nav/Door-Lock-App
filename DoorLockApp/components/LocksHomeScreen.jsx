@@ -115,7 +115,7 @@ export default function LocksHomeScreen() {
             if (!token || !activeWorkspace) return;
             try {
               setLoading(true);
-              await deleteLock(token, lockId);
+              await deleteLock(token, activeWorkspace.workspace_id, lockId);
               Toast.show({ type: 'success', text1: 'Lock deleted' });
               await load();
             } catch (e) {

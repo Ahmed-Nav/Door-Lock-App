@@ -132,6 +132,39 @@ router.get(
 );
 
 
+router.post(
+  "/:groupId/locks",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { lockId, remove } = req.body;
+      await connectDB();
+
+      const update = remove
+        ? { $pull: { lockIds: lockId } }
+        : { $addToSet: { lockIds: lockId } };
+
+      const group = await Group.findOneAndUpdate(
+        { _id: req.params.groupId, workspace_id: req.workspaceId },
+        update,
+        { new: true }
+      );
+
+      if (!group) {
+        return res
+          .status(404)
+          .json({ ok: false, err: "group-not-found-in-workspace" });
+      }
+
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ ok: false, err: "server-error" });
+    }
+  }
+);
+
 router.delete(
   "/:groupId",
   verifyClerkOidc,

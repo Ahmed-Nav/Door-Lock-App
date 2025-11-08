@@ -146,8 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         let workspaceToSet: Workspace | null = null;
         const lastId = await AsyncStorage.getItem(KC_LAST_WORKSPACE_KEY);
 
-        if (lastId) {
-          // Fix for 'any' type: explicitly type 'w' as Workspace
+        if (lastId && typeof lastId === 'string' && lastId.length === 24) {
           workspaceToSet = apiUser.workspaces.find(
             (w: Workspace) => w.workspace_id === lastId,
           );
