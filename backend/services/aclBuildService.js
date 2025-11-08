@@ -25,25 +25,13 @@ async function collectUsersForLock(lockId) {
 
   
   const groups = await Group.find({ lockIds: lid }).lean();
-  const userIdOs = [...new Set(groups.flatMap((g) => g.userIds || []))]; // ObjectIds
+  const userIds = [...new Set(groups.flatMap((g) => g.userIds || []))]; 
 
-  if (userIdOs.length === 0) return [];
-
-  
-  const users = await User.find(
-    { _id: { $in: userIdOs } },
-    { clerkId: 1 } 
-  ).lean();
-
-  const clerkIds = users
-    .map((u) => u.clerkId || String(u._id)) 
-    .filter(Boolean);
-
-  if (clerkIds.length === 0) return [];
+  if (userIds.length === 0) return [];
 
   
   const keys = await UserKey.find(
-    { userId: { $in: clerkIds }, active: true },
+    { userId: { $in: userIds }, active: true },
     { kid: 1, pubB64: 1 }
   ).lean();
 
