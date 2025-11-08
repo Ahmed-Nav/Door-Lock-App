@@ -66,8 +66,7 @@ router.get(
 
       return res.json({ ok: true, envelope: doc.envelope });
     } catch (e) {
-      console.error("GET /locks/:lockId/acl/latest failed:", e);
-      return res.status(500).json({ ok: false, err: "server-error" });
+      next(e);
     }
   }
 );

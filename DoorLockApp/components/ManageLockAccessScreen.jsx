@@ -128,7 +128,7 @@ export default function ManageLockAccessScreen() {
       
 
       setUpdateStatus('Fetching new ACL...');
-      const data = await fetchLatestAcl(token, Number(ctxLockId));
+      const data = await fetchLatestAcl(token, activeWorkspace.workspace_id, Number(ctxLockId));
       if (!data?.ok || !data?.envelope) {
         throw new Error('Failed to fetch new ACL envelope from server.');
       }
