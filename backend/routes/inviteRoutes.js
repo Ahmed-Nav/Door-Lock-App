@@ -24,7 +24,6 @@ router.post(
   verifyClerkOidc,
   extractActiveWorkspace,
   requireAdmin,
-  requireOwner,
   async (req, res, next) => {
     try {
       const { email, role } = req.body;
