@@ -4,7 +4,7 @@ const router = express.Router();
 const { connectDB } = require("../services/db");
 const User = require("../models/User");
 const { Clerk } = require("@clerk/clerk-sdk-node");
-const { jose, jwtVerify, createRemoteJWKSet } = require("jose");
+const { SignJWT, jwtVerify, createRemoteJWKSet } = require("jose");
 
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin, requireOwner } = require("../middleware/requireRoleInWorkspace");
@@ -51,7 +51,7 @@ router.post(
         );
       }
 
-      const inviteToken = await new jose.SignJWT({
+      const inviteToken = await new SignJWT({
         workspaceId: workspaceId,
         email: email,
         role: role,
