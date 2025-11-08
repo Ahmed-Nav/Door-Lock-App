@@ -7,7 +7,7 @@ const requireRoleInWorkspace = (allowedRoles = []) => {
 
     const { dbUser, workspaceId } = req;
 
-    console.log("requireRoleInWorkspace - dbUser:", dbUser);
+    console.log("requireRoleInWorkspace - dbUser.workspaces:", dbUser.workspaces); // Added log
     console.log("requireRoleInWorkspace - workspaceId:", workspaceId);
 
     const workspaceAuth = dbUser.workspaces.find(

@@ -75,6 +75,7 @@ export default function ManageLockAccessScreen() {
         await unassignLockFromGroup(token, group._id, ctxLockId);
       }
     } catch (e) {
+      console.error('Toggle group failed:', e); // Added console.error
       Toast.show({ type: 'error', text1: 'Toggle failed', text2: 'Please try again' });
       load(); 
     }
