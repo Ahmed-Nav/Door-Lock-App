@@ -70,9 +70,9 @@ export default function ManageLockAccessScreen() {
 
     try {
       if (isEnabled) {
-        await assignLockToGroup(token, group._id, ctxLockId);
+        await assignLockToGroup(token, activeWorkspace.workspace_id, group._id, ctxLockId);
       } else {
-        await unassignLockFromGroup(token, group._id, ctxLockId);
+        await unassignLockFromGroup(token, activeWorkspace.workspace_id, group._id, ctxLockId);
       }
     } catch (e) {
       console.error('Toggle group failed:', e); // Added console.error
@@ -111,7 +111,7 @@ export default function ManageLockAccessScreen() {
 
 
       setUpdateStatus('Building new ACL...');
-      const rebuildRes = await rebuildAcl(token, Number(ctxLockId));
+      const rebuildRes = await rebuildAcl(token, activeWorkspace.workspace_id, Number(ctxLockId));
       if (!rebuildRes?.ok) {
         if (rebuildRes?.err === 'missing-userpubs') {
           const missingList = (rebuildRes.missing || []).map(m => m.email || m.id).join('\n• ');

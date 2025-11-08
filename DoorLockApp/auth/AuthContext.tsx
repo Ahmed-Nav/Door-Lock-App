@@ -157,7 +157,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           workspaceToSet = apiUser.workspaces[0];
         }
 
-        // --- THIS IS THE FIX for the 'possibly null' error ---
+        // Ensure workspaceToSet is actually one of the user's current workspaces
+        if (workspaceToSet && !apiUser.workspaces.some(w => w.workspace_id === workspaceToSet?.workspace_id)) {
+          workspaceToSet = null; // Discard invalid workspace
+          await AsyncStorage.removeItem(KC_LAST_WORKSPACE_KEY);
+        }
+
         // We must check if workspaceToSet is *still* valid before using it
         if (workspaceToSet) {
           setActiveWorkspace(workspaceToSet);
@@ -171,7 +176,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setActiveWorkspace(null);
           await AsyncStorage.removeItem(KC_LAST_WORKSPACE_KEY);
         }
-        // --- END OF FIX ---
       } else {
         // This is a new user with no workspaces
         setActiveWorkspace(null);

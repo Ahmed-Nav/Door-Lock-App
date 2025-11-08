@@ -16,13 +16,11 @@ const limiter = rateLimit({ windowMs: 60_000, max: 120 });
 
 router.post(
   "/locks/:lockId/acl/rebuild",
-  limiter,
-  verifyClerkOidc,
-  extractActiveWorkspace, 
-  requireAdmin, 
-  requireOwner,
-  async (req, res, next) => {
-    try {
+    limiter,
+    verifyClerkOidc,
+    extractActiveWorkspace,
+    requireAdmin,
+    async (req, res, next) => {    try {
       await connectDB();
       const lockId = parseLockId(req.params.lockId);
       if (!lockId)
@@ -43,9 +41,8 @@ router.post(
 router.get(
   "/locks/:lockId/acl/latest",
   verifyClerkOidc,
-  extractActiveWorkspace, 
-  requireAdmin, 
-  requireOwner,
+  extractActiveWorkspace,
+  requireAdmin,
   async (req, res, next) => {
     try {
       await connectDB();
