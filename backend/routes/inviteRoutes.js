@@ -92,7 +92,7 @@ router.post("/accept", verifyClerkOidc, async (req, res, next) => {
 
     let payload;
     try {
-      const { payload: p } = await jose.jwtVerify(
+      const { payload: p } = await jwtVerify(
         inviteToken,
         new TextEncoder().encode(process.env.JWT_SECRET),
         { issuer: "door-lock-app", audience: "door-lock-app-invite" }
