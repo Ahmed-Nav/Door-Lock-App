@@ -12,7 +12,7 @@ import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 
 import * as Sentry from '@sentry/react-native';
 
-import { Linking } from 'react-native';
+import { Linking, ActivityIndicator } from 'react-native';
 
 import { AuthProvider, useAuth } from './auth/AuthContext';
 
@@ -76,7 +76,12 @@ const linking = {
   prefixes: ['com.doorlockapp://'],
   config: {
     screens: {
-      InviteHandler: 'invite/:token',
+      InviteHandler: {
+        path: 'invite',
+        parse: {
+          token: (token: string) => token,
+        },
+      },
     },
   },
 };
@@ -222,7 +227,7 @@ Sentry.init({
 export default function App() {
   return (
     <AuthProvider>
-      <NavigationContainer>
+      <NavigationContainer linking={linking} fallback={<ActivityIndicator />}>
         <Router />
       </NavigationContainer>
 

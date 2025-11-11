@@ -43,7 +43,7 @@ export default function InviteHandlerScreen() {
     };
 
     handleAccept();
-  }, [token, route.params?.token, navigation, signIn]);
+  }, [token, route.params, navigation, signIn]);
 
   return (
     <View style={s.container}>
