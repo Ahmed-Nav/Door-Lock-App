@@ -21,7 +21,6 @@ export default function ClaimLockScreen() {
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
 
   const [claimMode, setClaimMode] = useState(null);
-  const [status, setStatus] = useState('Idle');
 
   const [manualLockId, setManualLockId] = useState('');
   const [manualClaimCode, setManualClaimCode] = useState('');
@@ -36,7 +35,6 @@ export default function ClaimLockScreen() {
         claimCode: String(p.claimCode),
       });
       setClaimMode('scan');
-      setStatus('Scanned. Press Claim to continue.');
     }
   }, [route?.params]);
 
@@ -61,7 +59,6 @@ export default function ClaimLockScreen() {
     }
 
     try {
-      setStatus('Claiming on server…');
       const { pubB64, kid } = await getOrCreateDeviceKey();
 
       let res;
@@ -82,7 +79,6 @@ export default function ClaimLockScreen() {
 
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
 
-      setStatus('Claimed');
       Toast.show({ type: 'success', text1: 'Claimed' });
 
       if (isNewUser && res.workspace) {
@@ -100,7 +96,6 @@ export default function ClaimLockScreen() {
         claimCode: claimCodeToClaim.trim(),
       });
     } catch (e) {
-      setStatus('Claim Failed');
       const err = e?.response?.data?.err || e?.message;
       if (err === 'already-claimed')
         Toast.show({
@@ -218,8 +213,6 @@ export default function ClaimLockScreen() {
           </TouchableOpacity>
         </>
       )}
-
-      <Text style={s.status}>Status: {status}</Text>
     </ScrollView>
   );
 }
@@ -266,5 +259,4 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   btGhost: { color: '#888', fontWeight: '600', fontSize: 16 },
-  status: { color: '#bbb', marginTop: 12, textAlign: 'center' },
 });

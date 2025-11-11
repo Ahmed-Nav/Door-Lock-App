@@ -67,6 +67,9 @@ const s = StyleSheet.create({
   demoteBtn: {
     backgroundColor: '#888',
   },
+  removeBtn: {
+    backgroundColor: '#ef4444',
+  },
   input: {
     backgroundColor: '#0b0b0f',
     color: 'white',
@@ -180,31 +183,9 @@ export default function UserManagementScreen() {
     setLoading(true);
     try {
       let usersData = [];
-      if (role === 'owner') {
+      if (role === 'owner' || role === 'admin') {
         const data = await listUsers(token, activeWorkspace.workspace_id);
         usersData = data.users || [];
-      } else if (role === 'admin') {
-        const { groups } = await listGroups(
-          token,
-          activeWorkspace.workspace_id,
-        );
-        const userMap = new Map();
-
-        for (const group of groups) {
-          const groupDetails = await getGroup(
-            token,
-            activeWorkspace.workspace_id,
-            group.id,
-          );
-          if (groupDetails.users) {
-            groupDetails.users.forEach(user => {
-              if (!userMap.has(user.id)) {
-                userMap.set(user.id, user);
-              }
-            });
-          }
-        }
-        usersData = Array.from(userMap.values());
       }
       setUsers(usersData);
     } catch (anyErr) {
@@ -260,6 +241,48 @@ export default function UserManagementScreen() {
     }
   };
 
+  const handleRemoveUser = async (userId: string) => {
+    if (!activeWorkspace) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No active workspace selected.',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Remove User',
+      'Are you sure you want to remove this user from the workspace?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteUser(token, activeWorkspace.workspace_id, userId);
+              Toast.show({
+                type: 'success',
+                text1: 'User Removed',
+                text2: 'The user has been removed from the workspace.',
+              });
+              fetchUsers();
+            } catch (anyErr) {
+              const err = anyErr as any;
+              console.error(err?.response?.data);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: `Failed to remove user: ${err?.response?.data?.err}`,
+              });
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (loading && users.length === 0) {
     return (
       <View style={s.container}>
@@ -274,13 +297,24 @@ export default function UserManagementScreen() {
       <Text style={s.role}>Role: {item.role}</Text>
 
       {role === 'owner' && item.role !== 'owner' && (
-        <TouchableOpacity
-          style={[s.btn, item.role === 'admin' ? s.demoteBtn : s.promoteBtn]}
-          onPress={() => handleRoleChange(item.id, item.role)}>
-          <Text style={s.btnText}>
-            {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
-          </Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={[
+              s.btn,
+              item.role === 'admin' ? s.demoteBtn : s.promoteBtn,
+              { flex: 1 },
+            ]}
+            onPress={() => handleRoleChange(item.id, item.role)}>
+            <Text style={s.btnText}>
+              {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.btn, s.removeBtn, { flex: 1 }]}
+            onPress={() => handleRemoveUser(item.id)}>
+            <Text style={s.btnText}>Remove</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );

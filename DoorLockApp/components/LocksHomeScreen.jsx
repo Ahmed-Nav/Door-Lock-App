@@ -243,7 +243,7 @@ export default function LocksHomeScreen() {
             </TouchableOpacity>
           )}
 
-          {isAdminOrOwner && (
+          {role === 'owner' && (
             <TouchableOpacity
               onPress={() =>
                 handleDelete(item.lockId, item.name || `Lock #${item.lockId}`)
@@ -266,7 +266,7 @@ export default function LocksHomeScreen() {
       {locks.length === 0 && !loading ? (
         <Text style={s.empty}>
           {role === 'admin' || role === 'owner'
-            ? 'No locks yet. Tap + to claim one.'
+            ? 'No locks yet.'
             : 'You have not been given access to any locks.'}
         </Text>
       ) : (
@@ -278,7 +278,7 @@ export default function LocksHomeScreen() {
         />
       )}
 
-      {(role === 'admin' || role === 'owner') && (
+      {(role === 'owner') && (
         <TouchableOpacity style={s.fab} onPress={goClaim}>
           <Text style={s.fabTxt}>＋</Text>
         </TouchableOpacity>

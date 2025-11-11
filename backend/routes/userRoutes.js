@@ -9,7 +9,7 @@ const { requireAdmin } = require("../middleware/requireRoleInWorkspace");
 const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 
 router.get(
-  "/users",
+  "/",
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin,
@@ -42,7 +42,7 @@ router.get(
 );
 
 router.patch(
-  "/users/:id/role",
+  "/:id/role",
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 
@@ -82,7 +82,7 @@ router.patch(
 
 
 router.delete(
-  "/users/:id",
+  "/:id",
   verifyClerkOidc,
   extractActiveWorkspace, 
   requireAdmin, 

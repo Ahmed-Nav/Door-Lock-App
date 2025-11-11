@@ -46,7 +46,7 @@ app.use("/api/groups", groupRoutes);
 app.use("/api", keyRoutes);
 app.use("/api", mfgRoutes);
 app.use("/api", lockRoutes);
-app.use("/api", userRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/invite", inviteRoutes);
 
 app.use(errorHandler);
