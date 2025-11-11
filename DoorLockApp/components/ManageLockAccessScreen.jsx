@@ -28,7 +28,7 @@ import {
 } from '../ble/bleManager';
 
 export default function ManageLockAccessScreen() {
-  const { token, role } = useAuth();
+  const { token, role, activeWorkspace } = useAuth();
   const nav = useNavigation();
   const route = useRoute();
   const ctxLockId = route.params?.lockId ?? null;
@@ -39,16 +39,20 @@ export default function ManageLockAccessScreen() {
   const [updateStatus, setUpdateStatus] = useState('');
 
   const load = useCallback(async () => {
-    if (role !== 'admin' || !ctxLockId) return;
+    if ((role !== 'admin' && role !== 'owner') || !ctxLockId) return;
     try {
-      const res = await listGroups(token);
+      const res = await listGroups(token, activeWorkspace.workspace_id);
       setAllGroups(res?.groups || []);
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Could not load groups' });
     }
-  }, [token, role, ctxLockId]);
+  }, [token, role, ctxLockId, activeWorkspace]);
 
-  useFocusEffect(load);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
 
   const handleToggleGroup = async (group, isEnabled) => {
@@ -66,11 +70,12 @@ export default function ManageLockAccessScreen() {
 
     try {
       if (isEnabled) {
-        await assignLockToGroup(token, group._id, ctxLockId);
+        await assignLockToGroup(token, activeWorkspace.workspace_id, group._id, ctxLockId);
       } else {
-        await unassignLockFromGroup(token, group._id, ctxLockId);
+        await unassignLockFromGroup(token, activeWorkspace.workspace_id, group._id, ctxLockId);
       }
     } catch (e) {
+      console.error('Toggle group failed:', e); // Added console.error
       Toast.show({ type: 'error', text1: 'Toggle failed', text2: 'Please try again' });
       load(); 
     }
@@ -106,7 +111,7 @@ export default function ManageLockAccessScreen() {
 
 
       setUpdateStatus('Building new ACL...');
-      const rebuildRes = await rebuildAcl(token, Number(ctxLockId));
+      const rebuildRes = await rebuildAcl(token, activeWorkspace.workspace_id, Number(ctxLockId));
       if (!rebuildRes?.ok) {
         if (rebuildRes?.err === 'missing-userpubs') {
           const missingList = (rebuildRes.missing || []).map(m => m.email || m.id).join('\n• ');
@@ -123,7 +128,7 @@ export default function ManageLockAccessScreen() {
       
 
       setUpdateStatus('Fetching new ACL...');
-      const data = await fetchLatestAcl(token, Number(ctxLockId));
+      const data = await fetchLatestAcl(token, activeWorkspace.workspace_id, Number(ctxLockId));
       if (!data?.ok || !data?.envelope) {
         throw new Error('Failed to fetch new ACL envelope from server.');
       }

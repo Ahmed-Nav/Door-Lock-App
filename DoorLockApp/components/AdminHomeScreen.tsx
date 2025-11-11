@@ -67,7 +67,7 @@ export default function AdminHomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={s.card}
+          style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('GlobalGroups')}
         >
           <Text style={s.cardTitle}>Manage User Groups</Text>
@@ -116,6 +116,7 @@ const s = StyleSheet.create({
     gap: 20,
   },
   card: {
+    backgroundColor: '#7B1FA2',
     borderRadius: 16,
     padding: 24,
     shadowColor: '#000',

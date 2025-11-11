@@ -14,10 +14,8 @@ module.exports = function errorHandler(err, req, res, _next) {
   const payload = {
     ok: false,
     code: err.code || "SERVER_ERROR",
+    message: err.message,
   };
-  if (process.env.NODE_ENV !== "production" && err.message) {
-    payload.message = err.message;
-  }
   // minimal structured log
   console.error(
     JSON.stringify({

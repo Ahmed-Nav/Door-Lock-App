@@ -20,30 +20,21 @@ function canonicalJson(obj) {
   return JSON.stringify(sort(obj));
 }
 
-async function collectUsersForLock(lockId) {
+async function collectUsersForLock(lockId, workspaceId) {
   const lid = Number(lockId);
 
   
-  const groups = await Group.find({ lockIds: lid }).lean();
-  const userIdOs = [...new Set(groups.flatMap((g) => g.userIds || []))]; // ObjectIds
+  const groups = await Group.find({
+    lockIds: lid,
+    workspace_id: workspaceId,
+  }).lean();
+  const userIds = [...new Set(groups.flatMap((g) => g.userIds || []))]; 
 
-  if (userIdOs.length === 0) return [];
-
-  
-  const users = await User.find(
-    { _id: { $in: userIdOs } },
-    { clerkId: 1 } 
-  ).lean();
-
-  const clerkIds = users
-    .map((u) => u.clerkId || String(u._id)) 
-    .filter(Boolean);
-
-  if (clerkIds.length === 0) return [];
+  if (userIds.length === 0) return [];
 
   
   const keys = await UserKey.find(
-    { userId: { $in: clerkIds }, active: true },
+    { userId: { $in: userIds }, active: true },
     { kid: 1, pubB64: 1 }
   ).lean();
 
@@ -51,8 +42,11 @@ async function collectUsersForLock(lockId) {
   return keys.map((k) => ({ kid: k.kid, pub: k.pubB64 }));
 }
 
-async function nextVersion(lockId) {
-  const last = await AclVersion.findOne({ lockId: Number(lockId) })
+async function nextVersion(lockId, workspaceId) {
+  const last = await AclVersion.findOne({
+    lockId: Number(lockId),
+    workspace_id: workspaceId,
+  })
     .sort({ version: -1 })
     .lean();
   return (last?.version || 0) + 1;
@@ -69,17 +63,27 @@ function signPayload(payloadObj) {
   return { payloadJson, sigB64: sigRaw.toString("base64") };
 }
 
-async function buildAndStore(lockId) {
-  const users = await collectUsersForLock(lockId);
-  const version = await nextVersion(lockId);
+async function buildAndStore(lockId, workspaceId) {
+  const users = await collectUsersForLock(lockId, workspaceId);
+  const version = await nextVersion(lockId, workspaceId);
   const payload = { lockId: Number(lockId), version, users };
 
   const { payloadJson, sigB64 } = signPayload(payload);
   const envelope = { sig: sigB64, payload: JSON.parse(payloadJson) };
 
   await AclVersion.findOneAndUpdate(
-    { lockId: Number(lockId), version },
-    { lockId: Number(lockId), version, envelope, updatedAt: new Date() },
+    {
+      lockId: Number(lockId),
+      version,
+      workspace_id: workspaceId,
+    },
+    {
+      lockId: Number(lockId),
+      version,
+      envelope,
+      workspace_id: workspaceId,
+      updatedAt: new Date(),
+    },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 

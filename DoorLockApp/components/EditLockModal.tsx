@@ -14,7 +14,7 @@ import Toast from 'react-native-toast-message';
 
 export default function EditLockModal() {
   const nav = useNavigation<any>();
-  const { token } = useAuth();
+  const { token, activeWorkspace } = useAuth();
   const { params } = useRoute<any>();
   const lockId = Number(params?.lockId);
   const [name, setName] = useState(params?.currentName || `My Lock #${lockId}`);
@@ -23,7 +23,12 @@ export default function EditLockModal() {
   const save = async () => {
     try {
       setBusy(true);
-      await updateLockName(token, lockId, name.trim());
+      await updateLockName(
+        token,
+        activeWorkspace?.workspace_id,
+        lockId,
+        name.trim(),
+      );
       Toast.show({
         type: 'success',
         text1: 'Saved!',

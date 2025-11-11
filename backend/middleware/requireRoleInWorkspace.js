@@ -7,9 +7,13 @@ const requireRoleInWorkspace = (allowedRoles = []) => {
 
     const { dbUser, workspaceId } = req;
 
+    console.log("requireRoleInWorkspace - dbUser.workspaces:", dbUser.workspaces); // Added log
+    console.log("requireRoleInWorkspace - workspaceId:", workspaceId);
+
     const workspaceAuth = dbUser.workspaces.find(
       (ws) => ws.workspace_id.toString() === workspaceId
     );
+    console.log("requireRoleInWorkspace - workspaceAuth:", workspaceAuth);
 
     if (!workspaceAuth) {
       return res.status(403).json({ ok: false, err: "FORBIDDEN" });

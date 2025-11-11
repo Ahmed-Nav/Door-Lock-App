@@ -79,32 +79,38 @@ export async function registerDeviceKeyWithServer(token) {
 }
 
 export async function saveClaimContext(ctx) {
-  const username = String(ctx.lockId);
-  const password = JSON.stringify({ ...ctx, ts: Date.now() });
-  await Keychain.setGenericPassword(username, password, {
-    service: CLAIM_SERVICE,
+  const { lockId } = ctx;
+  const service = `${CLAIM_SERVICE}-${lockId}`;
+  await Keychain.setGenericPassword(String(lockId), JSON.stringify(ctx), {
+    service,
     accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
   });
   return true;
 }
 
-
 export async function loadClaimContext(lockId) {
   try {
-    const res = await Keychain.getGenericPassword({
-      service: CLAIM_SERVICE,
-      username: String(lockId),
-    });
-    if (!res) return null;
-    return JSON.parse(res.password);
-  } catch {
+    const service = `${CLAIM_SERVICE}-${lockId}`;
+    console.log('Loading claim context for lockId:', lockId);
+    const saved = await Keychain.getGenericPassword({ service });
+    console.log('Keychain.getGenericPassword result:', saved);
+    if (saved?.password) {
+      const ctx = JSON.parse(saved.password);
+      console.log('Loaded claim context:', ctx);
+      return ctx;
+    }
+    return null;
+  } catch (e) {
+    console.log('Error loading claim context:', e);
     return null;
   }
 }
 
-
 export async function clearClaimContext(_lockId) {
+  const service = `${CLAIM_SERVICE}-${_lockId}`;
   try {
-    await Keychain.resetGenericPassword({ service: CLAIM_SERVICE });
+    await Keychain.resetGenericPassword({
+      service,
+    });
   } catch {}
 }
