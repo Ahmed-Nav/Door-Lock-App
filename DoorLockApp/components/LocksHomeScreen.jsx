@@ -26,7 +26,7 @@ import { Platform, PermissionsAndroid } from 'react-native';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
-  const { token, role, activeWorkspace } = useAuth();
+  const { token, role, activeWorkspace, signOut } = useAuth();
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockStatuses, setUnlockStatuses] = useState({});
@@ -281,6 +281,12 @@ export default function LocksHomeScreen() {
       {(role === 'owner') && (
         <TouchableOpacity style={s.fab} onPress={goClaim}>
           <Text style={s.fabTxt}>＋</Text>
+        </TouchableOpacity>
+      )}
+
+      {role === 'user' && (
+        <TouchableOpacity style={s.signOut} onPress={signOut}>
+          <Text style={s.signOutTxt}>Sign Out</Text>
         </TouchableOpacity>
       )}
     </View>
