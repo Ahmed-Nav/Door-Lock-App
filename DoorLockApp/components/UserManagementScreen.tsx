@@ -20,185 +20,9 @@ import {
   updateUserRole,
   deleteUser,
   inviteUser,
+  listGroups,
+  getGroup,
 } from '../services/apiService';
-
-export default function UserManagementScreen() {
-  const { token, activeWorkspace, role } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [isInviting, setIsInviting] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState(null);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
-  const [roleItems, setRoleItems] = useState([
-    { label: 'Admin', value: 'admin' },
-    { label: 'User', value: 'user' },
-  ]);
-  // --- End V2 State ---
-
-  const fetchUsers = useCallback(async () => {
-    if (!token || !activeWorkspace) return;
-    setLoading(true);
-    try {
-      const data = await listUsers(token, activeWorkspace.workspace_id);
-      setUsers(data.users || []);
-    } catch (anyErr) {
-      const err = anyErr as any;
-      Alert.alert('Error', err?.response?.data?.err || 'Failed to load users.');
-    }
-    setLoading(false);
-  }, [token, activeWorkspace]);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchUsers();
-    }, [token, activeWorkspace?.workspace_id]),
-  );
-
-  // V2: This handler is now workspace-aware
-  const handleRoleChange = async (userId: string, currentRole: string) => {
-    if (!activeWorkspace) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'No active workspace selected.',
-      });
-      return;
-    }
-    const newRole = currentRole === 'admin' ? 'user' : 'admin';
-    try {
-      await updateUserRole(
-        token,
-        activeWorkspace.workspace_id,
-        userId,
-        newRole,
-      );
-      Toast.show({
-        type: 'success',
-        text1: 'Role updated',
-        text2: `User role updated to ${newRole}`,
-      });
-      fetchUsers();
-    } catch (anyErr) {
-      const err = anyErr as any;
-      console.error(err?.response?.data);
-      Alert.alert(
-        'Error',
-        `Failed to update role: ${err?.response?.data?.err}`,
-      );
-    }
-  };
-
-  const handleInvite = async () => {
-    if (!inviteEmail || !inviteRole) {
-      Toast.show({ type: 'error', text1: 'Missing fields' });
-      return;
-    }
-    if (!token || !activeWorkspace) return;
-
-    setIsInviting(true);
-    try {
-      await inviteUser(
-        token,
-        activeWorkspace.workspace_id,
-        inviteEmail,
-        inviteRole,
-      );
-      Toast.show({
-        type: 'success',
-        text1: 'Invite Sent',
-        text2: `Invite successfully sent to ${inviteEmail}`,
-      });
-      setInviteEmail('');
-      setInviteRole(null);
-    } catch (anyErr) {
-      const err = anyErr as any;
-      console.error(err?.response?.data);
-      Alert.alert(
-        'Invite Failed',
-        err?.response?.data?.message || 'An error occurred',
-      );
-    } finally {
-      setIsInviting(false);
-    }
-  };
-
-  if (loading && users.length === 0) {
-    return (
-      <View style={s.container}>
-        <ActivityIndicator color="#7B1FA2" size="large" />
-      </View>
-    );
-  }
-
-  const renderInviteForm = () => (
-    <View style={[s.card, { zIndex: 1000 }]}>
-      <Text style={s.header}>Invite New User</Text>
-      <TextInput
-        style={s.input}
-        placeholder="Enter user email"
-        placeholderTextColor="#888"
-        value={inviteEmail}
-        onChangeText={setInviteEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <DropDownPicker
-        open={roleDropdownOpen}
-        value={inviteRole}
-        items={roleItems}
-        setOpen={setRoleDropdownOpen}
-        setValue={setInviteRole}
-        setItems={setRoleItems}
-        placeholder="Select a role"
-        style={s.dropdown}
-        textStyle={{ color: 'white' }}
-        dropDownContainerStyle={s.dropdownContainer}
-        zIndex={1000}
-      />
-      <TouchableOpacity
-        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
-        onPress={handleInvite}
-        disabled={isInviting || !inviteEmail || !inviteRole}
-      >
-        <Text style={s.btnText}>
-          {isInviting ? 'Sending...' : 'Send Invite'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderItem = ({ item }: { item: any }) => (
-    <View style={s.card}>
-      <Text style={s.email}>{item.email}</Text>
-      <Text style={s.role}>Role: {item.role}</Text>
-
-      {item.role !== 'owner' && (
-        <TouchableOpacity
-          style={[s.btn, item.role === 'admin' ? s.demoteBtn : s.promoteBtn]}
-          onPress={() => handleRoleChange(item.id, item.role)}
-        >
-          <Text style={s.btnText}>
-            {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  return (
-    <View style={s.container}>
-      <FlatList
-        data={users}
-        ListHeaderComponent={renderInviteForm}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      />
-    </View>
-  );
-}
 
 const s = StyleSheet.create({
   container: {
@@ -261,3 +85,217 @@ const s = StyleSheet.create({
     borderColor: '#2a2a33',
   },
 });
+
+const InviteForm = ({ onInviteSuccess }: { onInviteSuccess: () => void }) => {
+  const { token, activeWorkspace } = useAuth();
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState(null);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [roleItems, setRoleItems] = useState([
+    { label: 'Admin', value: 'admin' },
+    { label: 'User', value: 'user' },
+  ]);
+
+  const handleInvite = async () => {
+    if (!inviteEmail || !inviteRole) {
+      Toast.show({ type: 'error', text1: 'Missing fields' });
+      return;
+    }
+    if (!token || !activeWorkspace) return;
+
+    setIsInviting(true);
+    try {
+      await inviteUser(
+        token,
+        activeWorkspace.workspace_id,
+        inviteEmail,
+        inviteRole,
+      );
+      Toast.show({
+        type: 'success',
+        text1: 'Invite Sent',
+        text2: `Invite successfully sent to ${inviteEmail}`,
+      });
+      setInviteEmail('');
+      setInviteRole(null);
+      onInviteSuccess();
+    } catch (anyErr) {
+      const err = anyErr as any;
+      console.error(err?.response?.data);
+      Toast.show({
+        type: 'error',
+        text1: 'Invite Failed',
+        text2: err?.response?.data?.message || 'An error occurred',
+      });
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  return (
+    <View style={[s.card, { zIndex: 1000 }]}>
+      <Text style={s.header}>Invite New User</Text>
+      <TextInput
+        style={s.input}
+        placeholder="Enter user email"
+        placeholderTextColor="#888"
+        value={inviteEmail}
+        onChangeText={setInviteEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+      />
+      <DropDownPicker
+        open={roleDropdownOpen}
+        value={inviteRole}
+        items={roleItems}
+        setOpen={setRoleDropdownOpen}
+        setValue={setInviteRole}
+        setItems={setRoleItems}
+        placeholder="Select a role"
+        style={s.dropdown}
+        textStyle={{ color: 'white' }}
+        dropDownContainerStyle={s.dropdownContainer}
+        zIndex={1000}
+      />
+      <TouchableOpacity
+        style={[s.btn, { backgroundColor: '#7B1FA2' }]}
+        onPress={handleInvite}
+        disabled={isInviting || !inviteEmail || !inviteRole}>
+        <Text style={s.btnText}>
+          {isInviting ? 'Sending...' : 'Send Invite'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+export default function UserManagementScreen() {
+  const { token, activeWorkspace, role } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchUsers = useCallback(async () => {
+    if (!token || !activeWorkspace) return;
+    setLoading(true);
+    try {
+      let usersData = [];
+      if (role === 'owner') {
+        const data = await listUsers(token, activeWorkspace.workspace_id);
+        usersData = data.users || [];
+      } else if (role === 'admin') {
+        const { groups } = await listGroups(
+          token,
+          activeWorkspace.workspace_id,
+        );
+        const userMap = new Map();
+
+        for (const group of groups) {
+          const groupDetails = await getGroup(
+            token,
+            activeWorkspace.workspace_id,
+            group.id,
+          );
+          if (groupDetails.users) {
+            groupDetails.users.forEach(user => {
+              if (!userMap.has(user.id)) {
+                userMap.set(user.id, user);
+              }
+            });
+          }
+        }
+        usersData = Array.from(userMap.values());
+      }
+      setUsers(usersData);
+    } catch (anyErr) {
+      const err = anyErr as any;
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: err?.response?.data?.err || 'Failed to load users.',
+      });
+      setUsers([]); // Clear users on error
+    }
+    setLoading(false);
+  }, [token, activeWorkspace, role]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUsers();
+    }, [fetchUsers]),
+  );
+
+  // V2: This handler is now workspace-aware
+  const handleRoleChange = async (userId: string, currentRole: string) => {
+    if (!activeWorkspace) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No active workspace selected.',
+      });
+      return;
+    }
+    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+    try {
+      await updateUserRole(
+        token,
+        activeWorkspace.workspace_id,
+        userId,
+        newRole,
+      );
+      Toast.show({
+        type: 'success',
+        text1: 'Role updated',
+        text2: `User role updated to ${newRole}`,
+      });
+      fetchUsers();
+    } catch (anyErr) {
+      const err = anyErr as any;
+      console.error(err?.response?.data);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: `Failed to update role: ${err?.response?.data?.err}`,
+      });
+    }
+  };
+
+  if (loading && users.length === 0) {
+    return (
+      <View style={s.container}>
+        <ActivityIndicator color="#7B1FA2" size="large" />
+      </View>
+    );
+  };
+
+  const renderItem = ({ item }: { item: any }) => (
+    <View style={s.card}>
+      <Text style={s.email}>{item.email}</Text>
+      <Text style={s.role}>Role: {item.role}</Text>
+
+      {role === 'owner' && item.role !== 'owner' && (
+        <TouchableOpacity
+          style={[s.btn, item.role === 'admin' ? s.demoteBtn : s.promoteBtn]}
+          onPress={() => handleRoleChange(item.id, item.role)}>
+          <Text style={s.btnText}>
+            {item.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={s.container}>
+      <FlatList
+        data={users}
+        ListHeaderComponent={
+          role === 'owner' ? <InviteForm onInviteSuccess={fetchUsers} /> : null
+        }
+        renderItem={renderItem}
+        keyExtractor={item => item.id}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      />
+    </View>
+  );
+}
