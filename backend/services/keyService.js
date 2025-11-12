@@ -56,6 +56,21 @@ function generateP256KeyPairPEM() {
   return { privPem, pubB64: pubRaw.toString("base64") };
 }
 
+function getKeyPairFromEnv() {
+  const privPem = process.env.ADMIN_PRIV_PEM;
+  const pubB64 = process.env.ADMIN_PUB_B64;
+
+  if (!privPem || !pubB64) {
+    console.error("ADMIN_PRIV_PEM or ADMIN_PUB_B64 not set in .env");
+    // Fallback to generating a new keypair to avoid breaking existing flow
+    // in case the env vars are not set.
+    console.warn("Falling back to generating a new keypair");
+    return generateP256KeyPairPEM();
+  }
+
+  return { privPem, pubB64 };
+}
+
 async function getOrCreateLockKey(lockId, workspaceId) {
   if (!lockId || !workspaceId) {
     throw new Error(
@@ -70,7 +85,7 @@ async function getOrCreateLockKey(lockId, workspaceId) {
   }).lean();
   if (doc) return doc;
 
-  const { privPem, pubB64 } = generateP256KeyPairPEM();
+  const { privPem, pubB64 } = getKeyPairFromEnv();
   const { encB64, ivB64 } = aesGcmEncrypt(Buffer.from(privPem, "utf8"));
 
   try {
