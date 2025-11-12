@@ -5,6 +5,7 @@ const UserKey = require("../models/UserKey");
 const AclVersion = require("../models/AclVersion");
 
 const ADMIN_PRIV_PEM = process.env.ADMIN_PRIV_PEM;
+console.log("ACL_BUILD_SERVICE: ADMIN_PRIV_PEM loaded:", !!ADMIN_PRIV_PEM); // Added log
 if (!ADMIN_PRIV_PEM)
   console.warn("ADMIN_PRIV_PEM missing (ACL signing will fail)");
 
@@ -53,32 +54,41 @@ async function nextVersion(lockId, workspaceId) {
 }
 
 function signPayload(payloadObj) {
+  console.log("ACL_BUILD_SERVICE: Entering signPayload function."); // Added log
   if (!ADMIN_PRIV_PEM) {
-    console.error("ADMIN_PRIV_PEM is missing. ACL signing cannot proceed."); // More specific error log
-    throw new Error("ADMIN_PRIV_PEM-missing"); // New specific error code
+    console.error("ADMIN_PRIV_PEM is missing. ACL signing cannot proceed.");
+    throw new Error("ADMIN_PRIV_PEM-missing");
   }
+  console.log("ACL_BUILD_SERVICE: ADMIN_PRIV_PEM length:", ADMIN_PRIV_PEM.length); // Added log
   const payloadJson = canonicalJson(payloadObj);
   let sigRaw;
   try {
+    console.log("ACL_BUILD_SERVICE: Attempting crypto.sign."); // Added log
     sigRaw = crypto.sign("sha256", Buffer.from(payloadJson, "utf8"), {
       key: ADMIN_PRIV_PEM,
       dsaEncoding: "ieee-p1363",
     });
+    console.log("ACL_BUILD_SERVICE: crypto.sign successful."); // Added log
   } catch (e) {
-    console.error("crypto.sign failed:", e); // Added error log
+    console.error("crypto.sign failed:", e);
     throw new Error("admin-sig-creation-failed");
   }
   if (sigRaw.length !== 64) {
-    console.error("Signature raw length is not 64:", sigRaw.length); // Added error log
+    console.error("Signature raw length is not 64:", sigRaw.length);
     throw new Error("bad-sig-len");
   }
+  console.log("ACL_BUILD_SERVICE: Exiting signPayload successfully."); // Added log
   return { payloadJson, sigB64: sigRaw.toString("base64") };
 }
 
 async function buildAndStore(lockId, workspaceId) {
+  console.log(`ACL_BUILD_SERVICE: Entering buildAndStore for lockId ${lockId}, workspaceId ${workspaceId}.`); // Added log
   const users = await collectUsersForLock(lockId, workspaceId);
+  console.log(`ACL_BUILD_SERVICE: Collected ${users.length} users.`); // Added log
   const version = await nextVersion(lockId, workspaceId);
+  console.log(`ACL_BUILD_SERVICE: Next ACL version: ${version}.`); // Added log
   const payload = { lockId: Number(lockId), version, users };
+  console.log("ACL_BUILD_SERVICE: Payload created:", JSON.stringify(payload)); // Added log
 
   const { payloadJson, sigB64 } = signPayload(payload);
   const envelope = { sig: sigB64, payload: JSON.parse(payloadJson) };
@@ -98,6 +108,7 @@ async function buildAndStore(lockId, workspaceId) {
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+  console.log("ACL_BUILD_SERVICE: ACL stored successfully."); // Added log
 
   return envelope;
 }
