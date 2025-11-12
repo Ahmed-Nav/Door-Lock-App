@@ -53,8 +53,10 @@ async function nextVersion(lockId, workspaceId) {
 }
 
 function signPayload(payloadObj) {
-  if (!ADMIN_PRIV_PEM) throw new Error("no-admin-priv-pem");
-  console.log("ADMIN_PRIV_PEM length:", ADMIN_PRIV_PEM.length); // Added log
+  if (!ADMIN_PRIV_PEM) {
+    console.error("ADMIN_PRIV_PEM is missing. ACL signing cannot proceed."); // More specific error log
+    throw new Error("ADMIN_PRIV_PEM-missing"); // New specific error code
+  }
   const payloadJson = canonicalJson(payloadObj);
   let sigRaw;
   try {

@@ -32,6 +32,9 @@ router.post(
     } catch (e) {
       if (e.code === "MISSING_USERPUBS") {
         e.status = 409;
+      } else if (e.message === "ADMIN_PRIV_PEM-missing") { // Handle the new error
+        e.status = 500;
+        e.message = "Server configuration error: Admin private key is missing.";
       }
       next(e);
     }
