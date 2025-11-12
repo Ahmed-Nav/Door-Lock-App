@@ -91,7 +91,7 @@ async function buildAndStore(lockId, workspaceId) {
   console.log("ACL_BUILD_SERVICE: Payload created:", JSON.stringify(payload)); // Added log
 
   const { payloadJson, sigB64 } = signPayload(payload);
-  const envelope = { sig: sigB64, payload: JSON.parse(payloadJson) };
+  const envelope = { sig: sigB64, payload: payloadJson };
 
   await AclVersion.findOneAndUpdate(
     {
