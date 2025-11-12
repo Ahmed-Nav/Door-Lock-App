@@ -60,6 +60,9 @@ function getKeyPairFromEnv() {
   const privPem = process.env.ADMIN_PRIV_PEM;
   const pubB64 = process.env.ADMIN_PUB_B64;
 
+  console.log("ADMIN_PRIV_PEM from env:", privPem);
+  console.log("ADMIN_PUB_B64 from env:", pubB64);
+
   if (!privPem || !pubB64) {
     console.error("ADMIN_PRIV_PEM or ADMIN_PUB_B64 not set in .env");
     // Fallback to generating a new keypair to avoid breaking existing flow
