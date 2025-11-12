@@ -54,12 +54,22 @@ async function nextVersion(lockId, workspaceId) {
 
 function signPayload(payloadObj) {
   if (!ADMIN_PRIV_PEM) throw new Error("no-admin-priv-pem");
+  console.log("ADMIN_PRIV_PEM length:", ADMIN_PRIV_PEM.length); // Added log
   const payloadJson = canonicalJson(payloadObj);
-  const sigRaw = crypto.sign("sha256", Buffer.from(payloadJson, "utf8"), {
-    key: ADMIN_PRIV_PEM,
-    dsaEncoding: "ieee-p1363",
-  });
-  if (sigRaw.length !== 64) throw new Error("bad-sig-len");
+  let sigRaw;
+  try {
+    sigRaw = crypto.sign("sha256", Buffer.from(payloadJson, "utf8"), {
+      key: ADMIN_PRIV_PEM,
+      dsaEncoding: "ieee-p1363",
+    });
+  } catch (e) {
+    console.error("crypto.sign failed:", e); // Added error log
+    throw new Error("admin-sig-creation-failed");
+  }
+  if (sigRaw.length !== 64) {
+    console.error("Signature raw length is not 64:", sigRaw.length); // Added error log
+    throw new Error("bad-sig-len");
+  }
   return { payloadJson, sigB64: sigRaw.toString("base64") };
 }
 

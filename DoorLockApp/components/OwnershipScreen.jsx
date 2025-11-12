@@ -102,19 +102,17 @@ export default function OwnershipScreen() {
       return Toast.show({ type: 'error', text1: 'Missing data', text2: 'Lock ID, Claim Code and Admin Key are required.' }) 
     }
     setBusy(true);
-    setStatus('Scanning…');
     let device = null;
     try {
       await ensurePermissions();
       device = await scanAndConnectForLockId(Number(lockId));
-      setStatus('Sending ownership…');
       await sendOwnershipSet(device, {
         lockId: Number(lockId),
         adminPubB64: adminPubB64.trim(),
         claimCode: claimCode.trim(),
       });
       try {
-        await patchLock(token, Number(lockId), { setupComplete: true });
+        await patchLock(token, activeWorkspace.workspace_id, Number(lockId), { setupComplete: true });
         await clearClaimContext(Number(lockId));
       } catch (e) {
         console.log(
@@ -122,24 +120,21 @@ export default function OwnershipScreen() {
           e?.response?.data || e?.message || e,
         );
       }
-      setStatus('Sent');
-      Alert.alert(
-        'Ownership OK',
-        'Ownership sent. Check lock Serial for [OWNERSHIP_OK].',
-        [
-          {
-            text: 'Next: Rebuild ACL',
-            onPress: () =>
-              navigation.navigate('RebuildACL', { lockId: String(lockId) }),
-          },
-          { text: 'Stay here' },
-        ],
-      );
+      Toast.show({
+        type: 'success',
+        text1: 'Ownership Succeeded',
+        text2: 'Ownership sent. Check lock Serial for [OWNERSHIP_OK].',
+      });
+      navigation.navigate('LocksHome');
     } catch (e) {
-      setStatus('Error');
-      Toast.show({ type: 'error', text1: String(e?.message || e) })
+      Toast.show({
+        type: 'error',
+        text1: 'Ownership Failed',
+        text2: String(e?.message || e),
+      });
     } finally {
       await safeDisconnect(device);
+      setBusy(false);
     }
   };
 
@@ -178,8 +173,6 @@ export default function OwnershipScreen() {
       >
         <Text style={s.btxt}>{busy ? 'Working…' : 'Send Ownership'}</Text>
       </TouchableOpacity>
-
-      <Text style={s.status}>Status: {status}</Text>
     </View>
   );
 }
