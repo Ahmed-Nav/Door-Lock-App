@@ -107,6 +107,24 @@ export default function ManageLockAccessScreen() {
         Toast.show({ type: 'info', text1: 'Pick a lock first' });
         return;
       }
+
+      if (allGroups.length === 0) {
+        Toast.show({ type: 'error', text1: 'No groups created' });
+        return;
+      }
+
+      const assignedGroups = allGroups.filter(g => g.lockIds.includes(ctxLockId));
+      if (assignedGroups.length === 0) {
+        Toast.show({ type: 'error', text1: 'Assign a group first' });
+        return;
+      }
+
+      const hasUsersInAssignedGroups = assignedGroups.some(g => (g.userCount ?? g.userIds?.length ?? 0) > 0);
+      if (!hasUsersInAssignedGroups) {
+        Toast.show({ type: 'error', text1: 'No users found in groups' });
+        return;
+      }
+
       setBusy(true);
 
 
@@ -122,6 +140,10 @@ export default function ManageLockAccessScreen() {
             visibilityTime: 10000,
           });
           throw new Error('missing-userpubs');
+        }
+        if (rebuildRes?.err === 'missing-ownership') {
+          Toast.show({ type: 'error', text1: 'Set ownership first' });
+          throw new Error('missing-ownership');
         }
         throw new Error(rebuildRes?.err || 'rebuild-failed');
       }
@@ -154,7 +176,7 @@ export default function ManageLockAccessScreen() {
       });
 
     } catch (e) {
-      if (e.message !== 'missing-userpubs') {
+      if (e.message !== 'missing-userpubs' && e.message !== 'missing-ownership') {
         Toast.show({
           type: 'error',
           text1: 'Update Failed',

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../auth/AuthContext';
@@ -82,6 +83,14 @@ export default function ClaimLockScreen() {
       Toast.show({ type: 'success', text1: 'Claimed' });
 
       if (isNewUser && res.workspace) {
+        await new Promise(resolve =>
+          Alert.alert(
+            'Log in',
+            'Please log in with the same email ID.',
+            [{ text: 'OK', onPress: resolve }],
+            { onDismiss: resolve, cancelable: true },
+          ),
+        );
         await signIn(token, res.workspace);
       }
 
