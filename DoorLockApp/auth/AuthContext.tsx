@@ -37,6 +37,7 @@ type AuthState = {
   signIn: (token?: string) => Promise<void>;
   signOut: () => Promise<void>;
   switchWorkspace: (workspaceId: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthCtx = createContext<AuthState>({
@@ -49,6 +50,7 @@ const AuthCtx = createContext<AuthState>({
   signIn: async () => {},
   signOut: async () => {},
   switchWorkspace: async () => {},
+  refreshUser: async () => {},
 });
 
 export const useAuth = () => useContext(AuthCtx);
@@ -233,6 +235,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const refreshUser = async () => {
+    setLoading(true);
+    try {
+      if (token) {
+        await loadAppData(token);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const switchWorkspace = async (workspaceId: string) => {
     if (!user) return;
     const newWorkspace = user.workspaces.find(
@@ -262,6 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       signIn, // V2: Expose single 'signIn'
       signOut,
       switchWorkspace,
+      refreshUser,
     }),
     [token, user, activeWorkspace, email, loading],
   );

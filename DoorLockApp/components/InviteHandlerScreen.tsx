@@ -7,7 +7,7 @@ import { acceptInvite } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 export default function InviteHandlerScreen() {
-  const { token, signIn } = useAuth();
+  const { token, refreshUser } = useAuth();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
 
@@ -28,7 +28,7 @@ export default function InviteHandlerScreen() {
           text2: 'You have joined the workspace.',
         });
 
-        await signIn(token);
+        await refreshUser();
 
         navigation.replace('AdminHome');
       } catch (anyErr) {
@@ -43,7 +43,7 @@ export default function InviteHandlerScreen() {
     };
 
     handleAccept();
-  }, [token, route.params, navigation, signIn]);
+  }, [token, route.params, navigation, refreshUser]);
 
   return (
     <View style={s.container}>

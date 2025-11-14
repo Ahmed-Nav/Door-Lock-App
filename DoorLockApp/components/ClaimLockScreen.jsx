@@ -15,7 +15,7 @@ import { claimFirstLock, claimExistingLock } from '../services/apiService';
 import { getOrCreateDeviceKey, saveClaimContext } from '../lib/keys';
 
 export default function ClaimLockScreen() {
-  const { token, user, activeWorkspace, signIn } = useAuth();
+  const { token, user, activeWorkspace, refreshUser } = useAuth();
   const route = useRoute();
   const navigation = useNavigation();
 
@@ -81,18 +81,8 @@ export default function ClaimLockScreen() {
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
 
       Toast.show({ type: 'success', text1: 'Claimed' });
+      await refreshUser();
 
-      if (isNewUser && res.workspace) {
-        await new Promise(resolve =>
-          Alert.alert(
-            'Log in',
-            'Please log in with the same email ID.',
-            [{ text: 'OK', onPress: resolve }],
-            { onDismiss: resolve, cancelable: true },
-          ),
-        );
-        await signIn(token, res.workspace);
-      }
 
       await saveClaimContext({
         lockId: Number(lockIdToClaim),

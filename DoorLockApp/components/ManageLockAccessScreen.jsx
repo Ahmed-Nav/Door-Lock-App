@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Switch,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
@@ -26,6 +27,8 @@ import {
   getGroup,
   inviteUser,
   assignLockToGroup,
+  updateUserRole,
+  deleteUser,
 } from '../services/apiService';
 import {
   scanAndConnectForLockId,
@@ -119,7 +122,7 @@ const InviteForm = ({ onInviteSuccess }) => {
 };
 
 export default function ManageLockAccessScreen() {
-  const { token, role, activeWorkspace } = useAuth();
+  const { token, role, activeWorkspace, user } = useAuth();
   const nav = useNavigation();
   const route = useRoute();
   const ctxLockId = route.params?.lockId ?? null;
@@ -176,6 +179,39 @@ export default function ManageLockAccessScreen() {
       newSelectedUsers.add(userId);
     }
     setSelectedUsers(newSelectedUsers);
+  };
+
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      await updateUserRole(token, activeWorkspace.workspace_id, userId, newRole);
+      Toast.show({ type: 'success', text1: 'User role updated' });
+      load();
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Failed to update role' });
+    }
+  };
+
+  const handleRemoveUser = async (userId) => {
+    Alert.alert(
+      'Delete User',
+      'Are you sure you want to remove this user from the workspace?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteUser(token, activeWorkspace.workspace_id, userId);
+              Toast.show({ type: 'success', text1: 'User removed' });
+              load();
+            } catch (error) {
+              Toast.show({ type: 'error', text1: 'Failed to remove user' });
+            }
+          },
+        },
+      ]
+    );
   };
 
   async function ensurePermissions() {
@@ -292,6 +328,8 @@ export default function ManageLockAccessScreen() {
 
   const renderItem = ({ item }) => {
     const isEnabled = selectedUsers.has(item.id);
+    const isCurrentUser = user.id === item.id;
+
     return (
       <View style={s.card}>
         <View>
@@ -299,6 +337,34 @@ export default function ManageLockAccessScreen() {
           <Text style={s.cardMeta}>
             Role: {item.role}
           </Text>
+          <View style={s.actionsContainer}>
+            {!isCurrentUser && (
+              <>
+                {item.role === 'user' && (
+                  <TouchableOpacity
+                    style={s.actionButton}
+                    onPress={() => handleUpdateRole(item.id, 'admin')}
+                  >
+                    <Text style={s.actionButtonText}>Promote to Admin</Text>
+                  </TouchableOpacity>
+                )}
+                {item.role === 'admin' && (
+                  <TouchableOpacity
+                    style={s.actionButton}
+                    onPress={() => handleUpdateRole(item.id, 'user')}
+                  >
+                    <Text style={s.actionButtonText}>Demote to User</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[s.actionButton, s.removeButton]}
+                  onPress={() => handleRemoveUser(item.id)}
+                >
+                  <Text style={s.actionButtonText}>Remove User</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
         <Switch
           trackColor={{ false: '#767577', true: '#81b0ff' }}
@@ -402,5 +468,23 @@ const s = StyleSheet.create({
   dropdownContainer: {
     backgroundColor: '#1d1d25',
     borderColor: '#2a2a33',
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  actionButton: {
+    backgroundColor: '#333',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 12,
+  },
+  removeButton: {
+    backgroundColor: '#8B0000',
   },
 });
