@@ -12,6 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { listLocks, deleteLock, fetchMyLocks } from '../services/apiService';
 import Toast from 'react-native-toast-message';
+import DropDownPicker from 'react-native-dropdown-picker';
 
 import {
   scanAndConnectForLockId,
@@ -26,10 +27,18 @@ import { Platform, PermissionsAndroid } from 'react-native';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
-  const { token, role, activeWorkspace, signOut } = useAuth();
+  const { token, role, activeWorkspace, signOut, user, switchWorkspace } =
+    useAuth();
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockStatuses, setUnlockStatuses] = useState({});
+  const [open, setOpen] = useState(false);
+
+  const items =
+    user?.workspaces.map(w => ({
+      label: w.name || `Workspace ${w.workspace_id.slice(-4)}`,
+      value: w.workspace_id,
+    })) || [];
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -208,7 +217,7 @@ export default function LocksHomeScreen() {
             </TouchableOpacity>
           )}
 
-          {isAdminOrOwner && (
+          {isAdminOrOwner && item.setupComplete && (
             <TouchableOpacity
               style={s.smallBtn}
               onPress={() => goManage(item.lockId, item.name)}
@@ -217,7 +226,7 @@ export default function LocksHomeScreen() {
             </TouchableOpacity>
           )}
 
-          {isAdminOrOwner && (
+          {isAdminOrOwner && item.setupComplete && (
             <TouchableOpacity
               style={s.smallBtn}
               onPress={() => goEdit(item.lockId, item.name)}
@@ -261,13 +270,36 @@ export default function LocksHomeScreen() {
 
   return (
     <View style={s.c}>
-      <Text style={s.title}>My Locks</Text>
+      <View style={s.header}>
+        <Text style={s.title}>My Locks</Text>
+        <DropDownPicker
+          open={open}
+          value={activeWorkspace?.workspace_id || null}
+          items={items}
+          setOpen={setOpen}
+          setValue={callback => {
+            const newId = callback();
+            if (newId) {
+              switchWorkspace(newId);
+            }
+          }}
+          style={s.dropdown}
+          textStyle={{ color: 'purple' }}
+          dropDownContainerStyle={s.dropdownContainer}
+          placeholder="Select a workspace"
+          loading={loading}
+        />
+      </View>
 
       {locks.length === 0 && !loading ? (
         <Text style={s.empty}>
-          {role === 'admin' || role === 'owner'
-            ? 'No locks yet.'
-            : 'You have not been given access to any locks.'}
+          {!activeWorkspace
+            ? 'no locks yet. tap + button to claim one'
+            : role === 'admin'
+            ? 'No locks claimed yet'
+            : role === 'user'
+            ? 'no locks assigned'
+            : 'No locks yet. Tap + to claim your first lock.'}
         </Text>
       ) : (
         <FlatList
@@ -278,25 +310,37 @@ export default function LocksHomeScreen() {
         />
       )}
 
-      {(role === 'owner') && (
+      {(!activeWorkspace || role === 'owner') && (
         <TouchableOpacity style={s.fab} onPress={goClaim}>
           <Text style={s.fabTxt}>＋</Text>
         </TouchableOpacity>
       )}
 
-      {role === 'user' && (
-        <TouchableOpacity style={s.signOut} onPress={signOut}>
-          <Text style={s.signOutTxt}>Sign Out</Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity style={s.signOut} onPress={signOut}>
+        <Text style={s.signOutTxt}>Sign Out</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   c: { flex: 1, backgroundColor: '#0b0b0f', padding: 16 },
+  header: {
+    marginBottom: 10,
+    zIndex: 1000,
+  },
   title: { color: 'white', fontSize: 22, fontWeight: '700', marginBottom: 10 },
   empty: { color: '#888', marginTop: 24, textAlign: 'center' },
+
+  dropdown: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
+    marginBottom: 10,
+  },
+  dropdownContainer: {
+    backgroundColor: '#1d1d25',
+    borderColor: '#2a2a33',
+  },
 
   card: {
     backgroundColor: '#14141c',

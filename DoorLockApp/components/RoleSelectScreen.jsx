@@ -7,8 +7,8 @@ export default function RoleSelectScreen() {
 
   return (
     <View style={s.c}>
-      <Text style={s.t}>Welcome to DoorLock</Text>
-      <Text style={s.sub}>Please sign in to continue</Text>
+      <Text style={s.t}>Welcome to Smart Unlock</Text>
+      <Text style={s.sub}>Your key to a secure and seamless life.</Text>
 
       <TouchableOpacity
         style={[s.btn, { backgroundColor: '#7B1FA2' }]}
@@ -31,7 +31,7 @@ const s = StyleSheet.create({
   },
   t: {
     color: 'white',
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',

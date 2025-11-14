@@ -140,6 +140,7 @@ function Router() {
   if (!activeWorkspace) {
     return (
       <Stack.Navigator>
+        <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
         <Stack.Screen
           name="ClaimLock"
           component={ClaimLockScreen}
@@ -182,8 +183,8 @@ function Router() {
   if (role === 'admin' || role === 'owner') {
     return (
       <Stack.Navigator>
-        <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
         <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
+        <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
         <Stack.Screen name="UserManagement" component={UserManagementScreen} />
         <Stack.Screen name="EditLock" component={EditLockModal} />
         <Stack.Screen name="ClaimLock" component={ClaimLockScreen} />
