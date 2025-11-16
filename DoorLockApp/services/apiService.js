@@ -230,6 +230,11 @@ export const listUsers = async (token, workspaceId) => {
   return r.data;
 };
 
+export const getUserByEmail = async (token, workspaceId, email) => {
+  const r = await api.get(`/users/by-email/${email}`, authWorkspace(token, workspaceId));
+  return r.data;
+};
+
 export const updateUserRole = async (token, workspaceId, userId, role) => {
   const r = await api.patch(
     `/users/${userId}/role`,

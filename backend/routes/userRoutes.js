@@ -41,6 +41,41 @@ router.get(
   }
 );
 
+router.get(
+  "/by-email/:email",
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      await connectDB();
+      const user = await User.findOne({
+        email: req.params.email,
+        "workspaces.workspace_id": req.workspaceId,
+      }).lean();
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found in this workspace" });
+      }
+
+      const ws = user.workspaces.find(
+        (w) => w.workspace_id.toString() === req.workspaceId
+      );
+
+      res.json({
+        ok: true,
+        user: {
+          id: user._id,
+          email: user.email,
+          role: ws.role,
+        },
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch user" });
+    }
+  }
+);
+
 router.patch(
   "/:id/role",
   verifyClerkOidc,
