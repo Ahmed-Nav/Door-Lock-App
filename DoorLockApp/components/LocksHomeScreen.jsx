@@ -12,7 +12,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { listLocks, deleteLock, fetchMyLocks } from '../services/apiService';
 import Toast from 'react-native-toast-message';
-import DropDownPicker from 'react-native-dropdown-picker';
 
 import {
   scanAndConnectForLockId,
@@ -27,18 +26,10 @@ import { Platform, PermissionsAndroid } from 'react-native';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
-  const { token, role, activeWorkspace, signOut, user, switchWorkspace } =
-    useAuth();
+  const { token, role, activeWorkspace, signOut, user } = useAuth();
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockStatuses, setUnlockStatuses] = useState({});
-  const [open, setOpen] = useState(false);
-
-  const items =
-    user?.workspaces.map(w => ({
-      label: w.name || `Workspace ${w.workspace_id.slice(-4)}`,
-      value: w.workspace_id,
-    })) || [];
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -272,23 +263,6 @@ export default function LocksHomeScreen() {
     <View style={s.c}>
       <View style={s.header}>
         <Text style={s.title}>My Locks</Text>
-        <DropDownPicker
-          open={open}
-          value={activeWorkspace?.workspace_id || null}
-          items={items}
-          setOpen={setOpen}
-          setValue={callback => {
-            const newId = callback();
-            if (newId) {
-              switchWorkspace(newId);
-            }
-          }}
-          style={s.dropdown}
-          textStyle={{ color: 'purple' }}
-          dropDownContainerStyle={s.dropdownContainer}
-          placeholder="Select a workspace"
-          loading={loading}
-        />
       </View>
 
       {locks.length === 0 && !loading ? (
@@ -331,16 +305,6 @@ const s = StyleSheet.create({
   },
   title: { color: 'white', fontSize: 22, fontWeight: '700', marginBottom: 10 },
   empty: { color: '#888', marginTop: 24, textAlign: 'center' },
-
-  dropdown: {
-    backgroundColor: '#1d1d25',
-    borderColor: '#2a2a33',
-    marginBottom: 10,
-  },
-  dropdownContainer: {
-    backgroundColor: '#1d1d25',
-    borderColor: '#2a2a33',
-  },
 
   card: {
     backgroundColor: '#14141c',

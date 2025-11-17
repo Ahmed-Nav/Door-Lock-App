@@ -1,5 +1,6 @@
 import { BleManager } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
+import { Alert, Linking } from 'react-native';
 
 export const UUIDS = {
   // Config
@@ -39,7 +40,35 @@ function parseB64JsonOrNull(b64) {
 }
 
 // ---------- Connect → discover → MTU/prio → verify lockId ----------
+export async function ensureBluetoothEnabled() {
+  const state = await manager.state();
+  if (state !== 'PoweredOn') {
+    return new Promise((resolve, reject) => {
+      Alert.alert(
+        'Bluetooth is Off',
+        'Please turn on Bluetooth to connect to the lock.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => reject(new Error('Bluetooth not enabled')),
+            style: 'cancel',
+          },
+          {
+            text: 'Turn On',
+            onPress: () => {
+              manager.enable();
+              resolve();
+            },
+          },
+        ],
+        { cancelable: false },
+      );
+    });
+  }
+}
+
 export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
+  await ensureBluetoothEnabled();
   return new Promise((resolve, reject) => {
     const sub = manager.onStateChange(async s => {
       if (s !== 'PoweredOn') return;
@@ -47,7 +76,7 @@ export async function scanAndConnectForLockId(lockId, timeoutMs = 15000) {
 
       const timer = setTimeout(() => {
         manager.stopDeviceScan();
-        reject(new Error('Scan Timeout'));
+        reject(new Error('No lock found'));
       }, timeoutMs);
 
       manager.startDeviceScan(
