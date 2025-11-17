@@ -68,14 +68,6 @@ export default function AdminHomeScreen() {
 
         <TouchableOpacity
           style={[s.card, { backgroundColor: '#7B1FA2' }]}
-          onPress={() => nav.navigate('GlobalGroups')}
-        >
-          <Text style={s.cardTitle}>Manage User Groups</Text>
-          <Text style={s.desc}>Create groups and add/remove users.</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: '#7B1FA2' }]}
           onPress={() => nav.navigate('UserManagement')}
         >
           <Text style={s.cardTitle}>Manage Users</Text>
