@@ -59,14 +59,13 @@ function signPayload(payloadObj) {
     console.error("ADMIN_PRIV_PEM is missing. ACL signing cannot proceed.");
     throw new Error("ADMIN_PRIV_PEM-missing");
   }
-  const key = ADMIN_PRIV_PEM.replace(/\\n/g, '\n');
   console.log("ACL_BUILD_SERVICE: ADMIN_PRIV_PEM length:", ADMIN_PRIV_PEM.length); // Added log
   const payloadJson = canonicalJson(payloadObj);
   let sigRaw;
   try {
     console.log("ACL_BUILD_SERVICE: Attempting crypto.sign."); // Added log
     sigRaw = crypto.sign("sha256", Buffer.from(payloadJson, "utf8"), {
-      key: key,
+      key: ADMIN_PRIV_PEM,
       dsaEncoding: "ieee-p1363",
     });
     console.log("ACL_BUILD_SERVICE: crypto.sign successful."); // Added log
