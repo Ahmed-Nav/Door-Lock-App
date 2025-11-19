@@ -450,10 +450,14 @@ export default function ManageLockAccessScreen() {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
+      paddingHorizontal: 10,
     },
     btBusy: {
       color: 'white',
       fontWeight: '600',
+      flex: 1,
+      flexWrap: 'wrap',
+      textAlign: 'center',
     },
     input: {
       backgroundColor: '#0b0b0f',
