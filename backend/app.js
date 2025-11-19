@@ -21,6 +21,7 @@ const inviteRoutes = require("./routes/inviteRoutes");
 
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
    origin: (process.env.CORS_ORIGINS || "")
