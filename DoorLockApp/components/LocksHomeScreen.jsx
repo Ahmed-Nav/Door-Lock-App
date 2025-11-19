@@ -7,10 +7,17 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
+  Modal,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { listLocks, deleteLock, fetchMyLocks } from '../services/apiService';
+import {
+  listLocks,
+  deleteLock,
+  fetchMyLocks,
+  getAdminPub,
+  patchLock,
+} from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 import {
@@ -19,8 +26,14 @@ import {
   waitAuthResult,
   sendAuthResponse,
   safeDisconnect,
+  sendOwnershipSet,
 } from '../ble/bleManager';
-import { signChallengeB64, getOrCreateDeviceKey } from '../lib/keys';
+import {
+  signChallengeB64,
+  getOrCreateDeviceKey,
+  loadClaimContext,
+  clearClaimContext,
+} from '../lib/keys';
 import { Buffer } from 'buffer';
 import { Platform, PermissionsAndroid } from 'react-native';
 
@@ -30,6 +43,9 @@ export default function LocksHomeScreen() {
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockStatuses, setUnlockStatuses] = useState({});
+  const [ownershipModalVisible, setOwnershipModalVisible] = useState(false);
+  const [ownershipStatus, setOwnershipStatus] = useState('');
+  const [selectedLock, setSelectedLock] = useState(null);
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -176,13 +192,74 @@ export default function LocksHomeScreen() {
     }
   };
 
+  const handleSetOwnership = async lock => {
+    let device;
+    setSelectedLock(lock);
+    setOwnershipModalVisible(true);
+    setOwnershipStatus('Starting ownership process...');
+
+    try {
+      await ensurePerms();
+      setOwnershipStatus('Fetching admin key...');
+      const { pub: adminPubB64 } = await getAdminPub(
+        token,
+        activeWorkspace.workspace_id,
+      );
+      if (!adminPubB64) {
+        throw new Error('Could not fetch admin public key.');
+      }
+
+      const claimContext = await loadClaimContext(lock.lockId);
+      if (!claimContext || !claimContext.claimCode) {
+        throw new Error('Claim code not found.');
+      }
+
+      setOwnershipStatus(`Scanning for Lock #${lock.lockId}...`);
+      device = await scanAndConnectForLockId(Number(lock.lockId));
+
+      setOwnershipStatus('Connected. Setting ownership...');
+      await sendOwnershipSet(device, {
+        lockId: Number(lock.lockId),
+        adminPubB64: adminPubB64.trim(),
+        claimCode: claimContext.claimCode.trim(),
+      });
+
+      setOwnershipStatus('Finalizing setup...');
+      await patchLock(token, activeWorkspace.workspace_id, Number(lock.lockId), {
+        setupComplete: true,
+      });
+      await clearClaimContext(Number(lock.lockId));
+
+      setOwnershipStatus('Ownership set successfully!');
+      Toast.show({
+        type: 'success',
+        text1: 'Ownership Set',
+        text2: `Lock #${lock.lockId} is now fully set up.`,
+      });
+      await load(); // Refresh the locks list
+    } catch (e) {
+      console.error('Set ownership error:', e);
+      setOwnershipStatus(`Error: ${e.message}`);
+      Toast.show({
+        type: 'error',
+        text1: 'Ownership Failed',
+        text2: String(e?.message || e),
+      });
+    } finally {
+      await safeDisconnect(device);
+      setTimeout(() => {
+        setOwnershipModalVisible(false);
+        setSelectedLock(null);
+      }, 3000);
+    }
+  };
+
   const goClaim = () => nav.navigate('ClaimLock');
   const goManage = (lockId, name) =>
     nav.navigate('ManageLockAccess', { lockId: lockId, lockName: name });
   const goEdit = (lockId, name) =>
     nav.navigate('EditLock', { lockId, currentName: name });
   const goUnlock = lockId => nav.navigate('Unlock', { lockId });
-  const goResume = id => nav.navigate('Ownership', { lockId: id });
 
   const renderItem = ({ item }) => {
     const unlockStatus = unlockStatuses[item.lockId];
@@ -202,7 +279,8 @@ export default function LocksHomeScreen() {
           {(role === 'admin' || role === 'owner') && item.claimed && !item.setupComplete && (
             <TouchableOpacity
               style={[s.smallBtn, { backgroundColor: '#7B1FA2' }]}
-              onPress={() => goResume(item.lockId)}
+              onPress={() => handleSetOwnership(item)}
+              disabled={ownershipModalVisible}
             >
               <Text style={s.smallBtnTxt}>Set Ownership</Text>
             </TouchableOpacity>
@@ -210,7 +288,7 @@ export default function LocksHomeScreen() {
 
           {isAdminOrOwner && item.setupComplete && (
             <TouchableOpacity
-              style={s.smallBtn}
+              style={[s.smallBtn, { backgroundColor: '#2196F3' }]}
               onPress={() => goManage(item.lockId, item.name)}
             >
               <Text style={s.smallBtnTxt}>Manage</Text>
@@ -219,7 +297,7 @@ export default function LocksHomeScreen() {
 
           {isAdminOrOwner && item.setupComplete && (
             <TouchableOpacity
-              style={s.smallBtn}
+              style={[s.smallBtn, { backgroundColor: '#FFC107' }]}
               onPress={() => goEdit(item.lockId, item.name)}
             >
               <Text style={s.smallBtnTxt}>Rename Lock</Text>
@@ -290,9 +368,33 @@ export default function LocksHomeScreen() {
         </TouchableOpacity>
       )}
 
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={ownershipModalVisible}
+        onRequestClose={() => {
+          setOwnershipModalVisible(!ownershipModalVisible);
+        }}
+      >
+        <View style={s.centeredView}>
+          <View style={s.modalView}>
+            <Text style={s.modalText}>
+              Setting ownership to lock #{selectedLock?.lockId}
+            </Text>
+            <Text style={s.modalGuide}>
+              Please stand near the lock. Do not turn off the app or exit the
+              screen.
+            </Text>
+            <Text style={s.modalStatus}>{ownershipStatus}</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {(role === 'user' || !activeWorkspace) && (
       <TouchableOpacity style={s.signOut} onPress={signOut}>
         <Text style={s.signOutTxt}>Sign Out</Text>
       </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -360,4 +462,44 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   bt: { color: '#fff', fontWeight: '700' },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: '#1c1c1e',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    width: '80%',
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalGuide: {
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#ccc',
+    fontSize: 14,
+  },
+  modalStatus: {
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 12,
+  },
 });

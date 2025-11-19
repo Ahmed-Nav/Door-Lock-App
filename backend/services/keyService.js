@@ -58,7 +58,7 @@ function generateP256KeyPairPEM() {
 
 function getKeyPairFromEnv() {
   const privPem = process.env.ADMIN_PRIV_PEM;
-  const pubB64 = process.env.ADMIN_PUB_B64;
+  const pubB64 = process.env.ADMIN_PUB_RAW_B64;
 
   console.log("ADMIN_PRIV_PEM from env:", privPem);
   console.log("ADMIN_PUB_B64 from env:", pubB64);

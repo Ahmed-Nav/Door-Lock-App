@@ -64,7 +64,7 @@ export default function ManageLockAccessScreen() {
     ]);
   
     const load = useCallback(async () => {
-      if ((role !== 'admin' && role !== 'owner') || !ctxLockId) return;
+      if (!activeWorkspace?.workspace_id || (role !== 'admin' && role !== 'owner') || !ctxLockId) return;
       setLoading(true);
       try {
         const groupName = `_lock_${ctxLockId}`;
@@ -81,16 +81,18 @@ export default function ManageLockAccessScreen() {
         }
         
         setLockGroup(group);
-        const userIds = new Set(group.userIds || []);
-        setSelectedUsers(userIds);
-        setInitialUsers(userIds);
+        if (group) {
+            const userIds = new Set(group.userIds || []);
+            setSelectedUsers(userIds);
+            setInitialUsers(userIds);
+        }
   
       } catch (e) {
         Toast.show({ type: 'error', text1: 'Error', text2: 'Could not load data' });
       } finally {
         setLoading(false);
       }
-    }, [token, role, ctxLockId, activeWorkspace]);
+    }, [token, role, ctxLockId, activeWorkspace?.workspace_id]);
   
     useFocusEffect(
       useCallback(() => {
@@ -400,7 +402,7 @@ export default function ManageLockAccessScreen() {
                       <Text style={s.modalText}>Step 1: Stand next to "{ctxLockName || `Lock #${ctxLockId}`}".</Text>
                       <Text style={s.modalText}>Step 2: Tap the button below to connect.</Text>
                       <TouchableOpacity
-                          style={[s.btn, { marginTop: 20 }]}
+                          style={[s.btn, { backgroundColor: '#7B1FA2', marginTop: 20 }]}
                           onPress={handleSync}
                           disabled={isSyncing}
                       >

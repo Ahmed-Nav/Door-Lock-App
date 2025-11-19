@@ -125,7 +125,7 @@ export default function OwnershipScreen() {
         text1: 'Ownership Succeeded',
         text2: 'Ownership sent. Check lock Serial for [OWNERSHIP_OK].',
       });
-      navigation.navigate('LocksHome');
+      navigation.replace('LocksHome');
     } catch (e) {
       Toast.show({
         type: 'error',

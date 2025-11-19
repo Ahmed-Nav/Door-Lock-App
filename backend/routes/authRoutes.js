@@ -27,8 +27,7 @@ router.get(
   "/admin/pub",
   verifyClerkOidc,
   extractActiveWorkspace, 
-  requireAdmin, 
-  requireOwner,
+  requireAdmin,
   async (req, res) => {
     try {
       const pub = (process.env.ADMIN_PUB_RAW_B64 || "").trim();

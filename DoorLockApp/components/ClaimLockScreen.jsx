@@ -7,12 +7,17 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Modal,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../auth/AuthContext';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { claimFirstLock, claimExistingLock } from '../services/apiService';
-import { getOrCreateDeviceKey, saveClaimContext } from '../lib/keys';
+import { claimFirstLock, claimExistingLock, patchLock } from '../services/apiService';
+import { getOrCreateDeviceKey, saveClaimContext, clearClaimContext } from '../lib/keys';
+import { scanAndConnectForLockId, sendOwnershipSet, safeDisconnect } from '../ble/bleManager';
+import RNAndroidLocationEnabler from 'react-native-android-location-enabler';
 
 export default function ClaimLockScreen() {
   const { token, user, activeWorkspace, refreshUser } = useAuth();
@@ -27,6 +32,8 @@ export default function ClaimLockScreen() {
   const [manualClaimCode, setManualClaimCode] = useState('');
 
   const [scannedData, setScannedData] = useState(null);
+  const [ownershipModalVisible, setOwnershipModalVisible] = useState(false);
+  const [ownershipStatus, setOwnershipStatus] = useState('');
 
   useEffect(() => {
     const p = route?.params || {};
@@ -38,6 +45,73 @@ export default function ClaimLockScreen() {
       setClaimMode('scan');
     }
   }, [route?.params]);
+
+  async function ensurePermissions() {
+    if (Platform.OS !== 'android') return;
+    const perms = [
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+    ];
+    if (Platform.Version < 31) {
+      perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+    }
+    for (const p of perms) {
+      const result = await PermissionsAndroid.request(p);
+      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+        throw new Error(`Missing permission: ${p}`);
+      }
+    }
+    try {
+      await RNAndroidLocationEnabler.promptForEnableLocationIfNeeded({
+        interval: 10000,
+        fastInterval: 5000,
+      });
+    } catch {}
+  }
+
+  const startOwnershipProcess = async (lockId, claimCode, adminPubB64, workspaceId) => {
+    setOwnershipStatus('Setting ownership...');
+    let device = null;
+    try {
+      await ensurePermissions();
+      setOwnershipStatus('Scanning for the lock...');
+      device = await scanAndConnectForLockId(Number(lockId));
+      setOwnershipStatus('Connecting and setting ownership...');
+      await sendOwnershipSet(device, {
+        lockId: Number(lockId),
+        adminPubB64: adminPubB64.trim(),
+        claimCode: claimCode.trim(),
+      });
+      try {
+        await patchLock(token, workspaceId, Number(lockId), { setupComplete: true });
+        await clearClaimContext(Number(lockId));
+        await refreshUser();
+        Toast.show({
+          type: 'success',
+          text1: 'Lock claimed successfully',
+        });
+        navigation.replace('LocksHome');
+      } catch (e) {
+        console.log(
+          'finalize setup failed:',
+          e?.response?.data || e?.message || e,
+        );
+        Toast.show({
+          type: 'error',
+          text1: 'Finalize setup failed',
+          text2: String(e?.response?.data?.err || e?.message || e),
+        });
+      }
+    } catch (e) {
+      Toast.show({
+        type: 'error',
+        text1: 'Ownership Failed',
+        text2: String(e?.message || e),
+      });
+    }
+    await safeDisconnect(device);
+    setOwnershipModalVisible(false);
+  };
 
   const doClaim = async () => {
     const isScanMode = claimMode === 'scan' && scannedData;
@@ -60,9 +134,10 @@ export default function ClaimLockScreen() {
     }
 
     try {
-      const { pubB64, kid } = await getOrCreateDeviceKey();
+      const { kid } = await getOrCreateDeviceKey();
 
       let res;
+      let workspaceId;
       if (isNewUser) {
         res = await claimFirstLock(token, {
           lockId: Number(lockIdToClaim),
@@ -70,12 +145,14 @@ export default function ClaimLockScreen() {
           kid,
           newWorkspaceName: newWorkspaceName.trim(),
         });
+        workspaceId = res.workspace._id;
       } else {
         res = await claimExistingLock(token, activeWorkspace.workspace_id, {
           lockId: Number(lockIdToClaim),
           claimCode: claimCodeToClaim.trim(),
           kid,
         });
+        workspaceId = activeWorkspace.workspace_id;
       }
 
       if (!res?.ok) throw new Error(res?.err || 'claim-failed');
@@ -90,10 +167,9 @@ export default function ClaimLockScreen() {
         adminPubB64: res.adminPubB64,
       });
 
-      navigation.replace('Ownership', {
-        lockId: Number(lockIdToClaim),
-        claimCode: claimCodeToClaim.trim(),
-      });
+      setOwnershipModalVisible(true);
+      await startOwnershipProcess(lockIdToClaim, claimCodeToClaim, res.adminPubB64, workspaceId);
+
     } catch (e) {
       const err = e?.response?.data?.err || e?.message;
       if (err === 'already-claimed')
@@ -160,13 +236,31 @@ export default function ClaimLockScreen() {
 
   return (
     <ScrollView style={s.c}>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={ownershipModalVisible}
+        onRequestClose={() => {
+          setOwnershipModalVisible(!ownershipModalVisible);
+        }}
+      >
+        <View style={s.centeredView}>
+          <View style={s.modalView}>
+            <Text style={s.modalText}>Setting ownership to the lock</Text>
+            <Text style={s.modalGuide}>Please stand near the lock.</Text>
+            <Text style={s.modalGuide}>Don't turn off the app or exit the screen.</Text>
+            <Text style={s.modalStatus}>{ownershipStatus}</Text>
+          </View>
+        </View>
+      </Modal>
+
       <Text style={s.t}>Claim a lock</Text>
       <Text style={s.label}>
-               {' '}
+        {' '}
         {user?.email
           ? `Signed in as ${user.email} (${activeWorkspace?.role || 'User'})`
           : 'Not signed in'}
-             {' '}
+        {' '}
       </Text>
 
       {claimMode === null && (
@@ -258,4 +352,42 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   btGhost: { color: '#888', fontWeight: '600', fontSize: 16 },
+  centeredView: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 22
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 35,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: "center",
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  modalGuide: {
+    marginBottom: 10,
+    textAlign: "center",
+    fontSize: 14,
+  },
+  modalStatus: {
+    marginTop: 15,
+    textAlign: "center",
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
