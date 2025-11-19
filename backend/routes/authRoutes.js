@@ -30,7 +30,7 @@ router.get(
   requireAdmin,
   async (req, res) => {
     try {
-      const pub = (process.env.ADMIN_PUB_RAW_B64 || "").trim();
+      const pub = (process.env.ADMIN_PUB_B64 || "").trim();
       if (!pub)
         return res.status(500).json({ ok: false, err: "admin-pub-missing" });
 
