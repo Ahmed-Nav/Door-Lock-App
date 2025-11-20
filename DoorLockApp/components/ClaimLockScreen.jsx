@@ -110,7 +110,7 @@ export default function ClaimLockScreen() {
       });
     }
     await safeDisconnect(device);
-    setOwnershipModalVisible(false);
+    
   };
 
   const doClaim = async () => {

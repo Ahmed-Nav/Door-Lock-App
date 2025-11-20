@@ -144,12 +144,12 @@ function Router() {
         <Stack.Screen
           name="ClaimLock"
           component={ClaimLockScreen}
-          options={{ title: 'Claim Your First Lock' }}
+          options={{ title: 'Add New Lock' }}
         />
         <Stack.Screen
           name="ClaimQr"
           component={ClaimQrScreen}
-          options={{ title: 'Scan Claim QR' }}
+          options={{ title: 'Scan QR Code' }}
         />
 
         <Stack.Screen

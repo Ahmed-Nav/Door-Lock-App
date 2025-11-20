@@ -166,7 +166,7 @@ export default function ManageLockAccessScreen() {
           await removeUserFromGroup(token, activeWorkspace.workspace_id, lockGroup._id, allEmails.get(userId));
         }
   
-        setUpdateStatus('Building new ACL...');
+        setUpdateStatus('Updating Digital Keys...');
         const rebuildRes = await rebuildAcl(token, activeWorkspace.workspace_id, Number(ctxLockId));
         if (!rebuildRes?.ok) {
           if (rebuildRes?.err === 'missing-userpubs') {
@@ -186,7 +186,7 @@ export default function ManageLockAccessScreen() {
           throw new Error(rebuildRes?.err || 'rebuild-failed');
         }
   
-        setUpdateStatus('Fetching new ACL...');
+        setUpdateStatus('Updating User Access...');
         const data = await fetchLatestAcl(token, activeWorkspace.workspace_id, Number(ctxLockId));
         if (!data?.ok || !data?.envelope) {
           throw new Error('Failed to fetch new ACL envelope from server.');
@@ -198,7 +198,7 @@ export default function ManageLockAccessScreen() {
         setUpdateStatus('Scanning for lock...');
         bleDevice = await scanAndConnectForLockId(Number(ctxLockId));
   
-        setUpdateStatus('Sending ACL to lock...');
+        setUpdateStatus('Syncing with lock...');
         await sendAcl(bleDevice, data.envelope);
   
         setUpdateStatus('');
