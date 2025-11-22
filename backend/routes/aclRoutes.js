@@ -57,7 +57,7 @@ router.post(
       const envelope = await buildAclForSingleUser(
         lockId,
         req.workspaceId,
-        req.clerkId
+        req.userId
       );
 
       return res.json({ ok: true, envelope });
