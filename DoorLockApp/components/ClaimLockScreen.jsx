@@ -233,7 +233,7 @@ export default function ClaimLockScreen() {
         </View>
       </Modal>
 
-      <Text style={s.t}>Claim a lock</Text>
+      <Text style={s.t}>Add new lock</Text>
       <Text style={s.label}>
         {' '}
         {user?.email

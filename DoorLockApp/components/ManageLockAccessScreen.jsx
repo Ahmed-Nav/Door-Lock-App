@@ -101,6 +101,10 @@ export default function ManageLockAccessScreen() {
     );
   
     const handleToggleUser = (userId) => {
+      const user = allUsers.find(u => u.id === userId);
+      if (user?.role === 'owner') {
+        return;
+      }
       const newSelectedUsers = new Set(selectedUsers);
       if (newSelectedUsers.has(userId)) {
         newSelectedUsers.delete(userId);
@@ -277,7 +281,8 @@ export default function ManageLockAccessScreen() {
     };
     
     const renderItem = ({ item }) => {
-      const isEnabled = selectedUsers.has(item.id);
+      const isOwner = item.role === 'owner';
+      const isEnabled = isOwner || selectedUsers.has(item.id);
   
       return (
         <View style={s.card}>
@@ -290,6 +295,7 @@ export default function ManageLockAccessScreen() {
             thumbColor={isEnabled ? '#7B1FA2' : '#f4f3f4'}
             onValueChange={() => handleToggleUser(item.id)}
             value={isEnabled}
+            disabled={isOwner}
           />
         </View>
       );

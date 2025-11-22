@@ -208,6 +208,15 @@ export default function UserManagementScreen() {
 
   // V2: This handler is now workspace-aware
   const handleRoleChange = async (userId: string, currentRole: string) => {
+    if (role === 'admin' && (currentRole === 'admin' || currentRole === 'owner')) {
+      Toast.show({
+        type: 'error',
+        text1: 'Permission Denied',
+        text2: "Admins can't change the role of other admins or owners.",
+      });
+      return;
+    }
+
     if (!activeWorkspace) {
       Toast.show({
         type: 'error',
@@ -296,7 +305,7 @@ export default function UserManagementScreen() {
       <Text style={s.email}>{item.email}</Text>
       <Text style={s.role}>Role: {item.role}</Text>
 
-      {role === 'owner' && item.role !== 'owner' && (
+      {((role === 'owner' && item.role !== 'owner') || (role === 'admin' && item.role === 'user')) && (
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity
             style={[
@@ -324,7 +333,7 @@ export default function UserManagementScreen() {
       <FlatList
         data={users}
         ListHeaderComponent={
-          role === 'owner' ? <InviteForm onInviteSuccess={fetchUsers} /> : null
+          (role === 'owner' || role === 'admin') ? <InviteForm onInviteSuccess={fetchUsers} /> : null
         }
         renderItem={renderItem}
         keyExtractor={item => item.id}
