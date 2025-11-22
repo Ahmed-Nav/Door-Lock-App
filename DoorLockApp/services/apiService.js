@@ -225,6 +225,24 @@ export const fetchLatestAcl = async (token, workspaceId, lockId) => {
   return r.data;
 };
 
+export const activateOwnerKey = async (token, workspaceId, lockId) => {
+  const r = await api.post(
+    `/locks/${lockId}/acl/activate-owner`,
+    {},
+    authWorkspace(token, workspaceId)
+  );
+  return r.data;
+};
+
+export const setOwnerKeyActivated = async (token, workspaceId, lockId) => {
+  const r = await api.patch(
+    `/locks/${lockId}/owner-key-activated`,
+    {},
+    authWorkspace(token, workspaceId)
+  );
+  return r.data;
+};
+
 export const listUsers = async (token, workspaceId) => {
   const r = await api.get('/users', authWorkspace(token, workspaceId)); 
   return r.data;

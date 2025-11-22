@@ -16,6 +16,7 @@ const LockSchema = new mongoose.Schema(
     ownerAccountId: { type: String, default: null },
     name: { type: String, default: "" },
     setupComplete: { type: Boolean, default: false, index: true },
+    ownerKeyActivated: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

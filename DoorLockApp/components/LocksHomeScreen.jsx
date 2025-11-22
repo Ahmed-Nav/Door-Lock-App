@@ -25,6 +25,8 @@ import {
   getAdminPub,
   patchLock,
   updateLockName,
+  activateOwnerKey,
+  setOwnerKeyActivated,
 } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
@@ -35,6 +37,7 @@ import {
   sendAuthResponse,
   safeDisconnect,
   sendOwnershipSet,
+  sendAcl,
 } from '../ble/bleManager';
 import {
   signChallengeB64,
@@ -59,6 +62,9 @@ export default function LocksHomeScreen() {
   const [selectedLockForRename, setSelectedLockForRename] = useState(null);
   const [newLockName, setNewLockName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isActivationModalVisible, setIsActivationModalVisible] = useState(false);
+  const [activationStatus, setActivationStatus] = useState('');
+  const [isActivating, setIsActivating] = useState(false);
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -267,6 +273,63 @@ export default function LocksHomeScreen() {
     }
   };
 
+  const handleActivateKey = async (lock) => {
+    let device;
+    setIsActivationModalVisible(true);
+    setIsActivating(true);
+    setActivationStatus('Starting activation...');
+
+    try {
+      await ensurePerms();
+      setActivationStatus('Building your key...');
+      
+      const { envelope } = await activateOwnerKey(
+        token,
+        activeWorkspace.workspace_id,
+        lock.lockId
+      );
+
+      if (!envelope) {
+        throw new Error('Could not build key.');
+      }
+
+      setActivationStatus(`Scanning for Lock #${lock.lockId}...`);
+      device = await scanAndConnectForLockId(Number(lock.lockId));
+
+      setActivationStatus('Connected. Activating your key...');
+      await sendAcl(device, envelope);
+
+      setActivationStatus('Finalizing...');
+      await setOwnerKeyActivated(
+        token,
+        activeWorkspace.workspace_id,
+        lock.lockId
+      );
+
+      setActivationStatus('Your key is now active!');
+      Toast.show({
+        type: 'success',
+        text1: 'Key Activated',
+        text2: `You can now use your key for Lock #${lock.lockId}.`,
+      });
+      await load(); // Refresh the locks list
+    } catch (e) {
+      console.error('Activate key error:', e);
+      setActivationStatus(`Error: ${e.message}`);
+      Toast.show({
+        type: 'error',
+        text1: 'Activation Failed',
+        text2: String(e?.message || e),
+      });
+    } finally {
+      await safeDisconnect(device);
+      setIsActivating(false);
+      setTimeout(() => {
+        setIsActivationModalVisible(false);
+      }, 3000);
+    }
+  };
+
   const handleRenameLock = async () => {
     if (!selectedLockForRename || !newLockName.trim()) return;
     setIsRenaming(true);
@@ -306,6 +369,7 @@ export default function LocksHomeScreen() {
     const unlockStatus = unlockStatuses[item.lockId];
 
     const isAdminOrOwner = role === 'admin' || role === 'owner';
+    const isOwner = role === 'owner';
 
     return (
       <View style={s.card}>
@@ -366,33 +430,45 @@ export default function LocksHomeScreen() {
                 <Text style={s.bt}>Finish Setup</Text>
               </TouchableOpacity>
             )
+          ) : isOwner && item.setupComplete && !item.ownerKeyActivated ? (
+            <TouchableOpacity
+              style={[s.btn, { width: '90%' }]}
+              onPress={() => handleActivateKey(item)}
+              disabled={isActivating}
+            >
+              <Text style={s.bt}>Activate My Key</Text>
+            </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={[
-                s.btn,
-                { width: '90%' },
-                unlockStatus === 'Failed' && { backgroundColor: '#b23b3b' },
-                unlockStatus === 'Unlocked!' && { backgroundColor: '#4CAF50' },
-              ]}
-              onPress={() => handleOneClickUnlock(item.lockId)}
-              disabled={!!unlockStatus && unlockStatus !== 'Failed'}
-            >
-              <Text style={s.bt}>
-                {unlockStatus ? unlockStatus : 'Unlock'}
-              </Text>
-            </TouchableOpacity>
-          )}
+            item.setupComplete && item.ownerKeyActivated && (
+            <>
+              <TouchableOpacity
+                style={[
+                  s.btn,
+                  { width: '90%' },
+                  unlockStatus === 'Failed' && { backgroundColor: '#b23b3b' },
+                  unlockStatus === 'Unlocked!' && { backgroundColor: '#4CAF50' },
+                ]}
+                onPress={() => handleOneClickUnlock(item.lockId)}
+                disabled={!!unlockStatus && unlockStatus !== 'Failed'}
+              >
+                <Text style={s.bt}>
+                  {unlockStatus ? unlockStatus : 'Unlock'}
+                </Text>
+              </TouchableOpacity>
 
-          {isAdminOrOwner && item.setupComplete && (
-            <TouchableOpacity
-              style={[s.smallBtn, { backgroundColor: '#2196F3', width: '90%' }]}
-              onPress={() => goManage(item.lockId, item.name)}
-            >
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <Text style={{color: 'white', marginRight: 8, fontSize: 16}}>👤</Text>
-                <Text style={s.smallBtnTxt}>Share Access</Text>
-              </View>
-            </TouchableOpacity>
+              {isAdminOrOwner && (
+                <TouchableOpacity
+                  style={[s.smallBtn, { backgroundColor: '#2196F3', width: '90%' }]}
+                  onPress={() => goManage(item.lockId, item.name)}
+                >
+                  <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    <Text style={{color: 'white', marginRight: 8, fontSize: 16}}>👤</Text>
+                    <Text style={s.smallBtnTxt}>Share Access</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </>
+            )
           )}
         </View>
       </View>
@@ -482,6 +558,26 @@ export default function LocksHomeScreen() {
                 screen.
               </Text>
               <Text style={s.modalStatus}>{ownershipStatus}</Text>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isActivationModalVisible}
+          onRequestClose={() => setIsActivationModalVisible(false)}
+        >
+          <View style={s.centeredView}>
+            <View style={s.modalView}>
+              <Text style={[s.modalText, {fontWeight: 'bold'}]}>Activating Key</Text>
+              <Text style={s.modalGuide}>
+                Please stand near the lock
+              </Text>
+              <Text style={s.modalGuide}>
+                Please don't close the app or exit the screen
+              </Text>
+              <Text style={s.modalStatus}>{activationStatus}</Text>
             </View>
           </View>
         </Modal>

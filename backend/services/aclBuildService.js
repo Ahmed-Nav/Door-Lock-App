@@ -113,4 +113,34 @@ async function buildAndStore(lockId, workspaceId) {
   return envelope;
 }
 
-module.exports = { buildAndStore };
+async function buildAclForSingleUser(lockId, workspaceId, userId) {
+  console.log(
+    `ACL_BUILD_SERVICE: Entering buildAclForSingleUser for lockId ${lockId}, workspaceId ${workspaceId}, userId ${userId}.`
+  );
+
+  const key = await UserKey.findOne(
+    { userId: userId, active: true },
+    { kid: 1, pubB64: 1 }
+  ).lean();
+
+  if (!key) {
+    const e = new Error("no-user-key-found");
+    e.code = "NOT_FOUND";
+    e.status = 404;
+    throw e;
+  }
+
+  const users = [{ kid: key.kid, pub: key.pubB64 }];
+
+  const version = await nextVersion(lockId, workspaceId);
+  console.log(`ACL_BUILD_SERVICE: Next ACL version: ${version}.`);
+  const payload = { lockId: Number(lockId), version, users };
+  console.log("ACL_BUILD_SERVICE: Payload created:", JSON.stringify(payload));
+
+  const { payloadJson, sigB64 } = signPayload(payload);
+  const envelope = { sig: sigB64, payload: payloadJson };
+
+  return envelope;
+}
+
+module.exports = { buildAndStore, buildAclForSingleUser };

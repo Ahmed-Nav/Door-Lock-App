@@ -7,7 +7,7 @@ const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const { requireAdmin, requireOwner } = require("../middleware/requireRoleInWorkspace");
 const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 
-const { buildAndStore } = require("../services/aclBuildService");
+const { buildAndStore, buildAclForSingleUser } = require("../services/aclBuildService");
 const { parseLockId } = require("../middleware/validate");
 const AclVersion = require("../models/AclVersion");
 
@@ -33,6 +33,36 @@ router.post(
       if (e.code === "MISSING_USERPUBS") {
         e.status = 409;
       } else if (e.message === "ADMIN_PRIV_PEM-missing") { // Handle the new error
+        e.status = 500;
+        e.message = "Server configuration error: Admin private key is missing.";
+      }
+      next(e);
+    }
+  }
+);
+
+router.post(
+  "/locks/:lockId/acl/activate-owner",
+  limiter,
+  verifyClerkOidc,
+  extractActiveWorkspace,
+  requireOwner,
+  async (req, res, next) => {
+    try {
+      await connectDB();
+      const lockId = parseLockId(req.params.lockId);
+      if (!lockId)
+        return res.status(400).json({ ok: false, err: "bad-lockId" });
+
+      const envelope = await buildAclForSingleUser(
+        lockId,
+        req.workspaceId,
+        req.user.sub
+      );
+
+      return res.json({ ok: true, envelope });
+    } catch (e) {
+      if (e.message === "ADMIN_PRIV_PEM-missing") {
         e.status = 500;
         e.message = "Server configuration error: Admin private key is missing.";
       }

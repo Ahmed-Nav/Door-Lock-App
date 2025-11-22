@@ -150,7 +150,7 @@ export default function ClaimLockScreen() {
           text1: 'Invalid code',
           text2: 'The claim code is incorrect.',
         });
-      } else if (err === 'no-lock-found') {
+      } else if (err === 'no-lock-found' || err === 'No lock found') {
         Toast.show({
           type: 'error',
           text1: 'Setup failed',
@@ -167,7 +167,7 @@ export default function ClaimLockScreen() {
       await safeDisconnect(device);
       setIsClaiming(false);
       await refreshUser();
-      navigation.replace('AdminHome');
+      navigation.replace('LocksHome');
     }
   };
 
