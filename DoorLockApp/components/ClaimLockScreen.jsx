@@ -136,8 +136,6 @@ export default function ClaimLockScreen() {
         type: 'success',
         text1: 'Lock claimed successfully',
       });
-
-      navigation.replace('LocksHome');
     } catch (e) {
       const err = e?.response?.data?.err || e?.message;
       if (err === 'already-claimed') {
@@ -152,6 +150,12 @@ export default function ClaimLockScreen() {
           text1: 'Invalid code',
           text2: 'The claim code is incorrect.',
         });
+      } else if (err === 'no-lock-found') {
+        Toast.show({
+          type: 'error',
+          text1: 'Setup failed',
+          text2: 'No lock found.',
+        });
       } else {
         Toast.show({
           type: 'error',
@@ -162,6 +166,8 @@ export default function ClaimLockScreen() {
     } finally {
       await safeDisconnect(device);
       setIsClaiming(false);
+      await refreshUser();
+      navigation.replace('AdminHome');
     }
   };
 

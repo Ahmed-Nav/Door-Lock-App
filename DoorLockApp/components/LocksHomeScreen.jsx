@@ -1,4 +1,11 @@
 // DoorLockApp/components/LocksHomeScreen.jsx
+import {
+  Menu,
+  MenuTrigger,
+  MenuOptions,
+  MenuOption,
+  MenuProvider,
+} from 'react-native-popup-menu';
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -17,6 +24,7 @@ import {
   fetchMyLocks,
   getAdminPub,
   patchLock,
+  updateLockName,
 } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
@@ -35,7 +43,7 @@ import {
   clearClaimContext,
 } from '../lib/keys';
 import { Buffer } from 'buffer';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, TextInput } from 'react-native';
 
 export default function LocksHomeScreen() {
   const nav = useNavigation();
@@ -46,6 +54,11 @@ export default function LocksHomeScreen() {
   const [ownershipModalVisible, setOwnershipModalVisible] = useState(false);
   const [ownershipStatus, setOwnershipStatus] = useState('');
   const [selectedLock, setSelectedLock] = useState(null);
+  const [dropdownVisible, setDropdownVisible] = useState(null);
+  const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
+  const [selectedLockForRename, setSelectedLockForRename] = useState(null);
+  const [newLockName, setNewLockName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   async function ensurePerms() {
     if (Platform.OS !== 'android') return;
@@ -254,11 +267,39 @@ export default function LocksHomeScreen() {
     }
   };
 
+  const handleRenameLock = async () => {
+    if (!selectedLockForRename || !newLockName.trim()) return;
+    setIsRenaming(true);
+    try {
+      await updateLockName(
+        token,
+        activeWorkspace.workspace_id,
+        selectedLockForRename.lockId,
+        newLockName.trim(),
+      );
+      Toast.show({
+        type: 'success',
+        text1: 'Lock Renamed',
+        text2: 'The lock name has been updated.',
+      });
+      setIsRenameModalVisible(false);
+      setSelectedLockForRename(null);
+      await load();
+    } catch (e) {
+      console.error('Rename lock error:', e);
+      Toast.show({
+        type: 'error',
+        text1: 'Rename Failed',
+        text2: String(e?.message || e),
+      });
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   const goClaim = () => nav.navigate('ClaimLock');
   const goManage = (lockId, name) =>
     nav.navigate('ManageLockAccess', { lockId: lockId, lockName: name });
-  const goEdit = (lockId, name) =>
-    nav.navigate('EditLock', { lockId, currentName: name });
   const goUnlock = lockId => nav.navigate('Unlock', { lockId });
 
   const renderItem = ({ item }) => {
@@ -268,68 +309,89 @@ export default function LocksHomeScreen() {
 
     return (
       <View style={s.card}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.cardTitle}>{item.name || `Lock #${item.lockId}`}</Text>
-          <Text style={s.cardMeta}>
-            {item.claimed ? 'Claimed' : 'Unclaimed'}
-          </Text>
+        <View style={s.cardHeader}>
+          <View style={s.cardHeaderLeft}>
+            <Text style={s.lockIcon}>🔒</Text>
+            <Text style={s.cardTitle}>
+              {item.name || `Lock #${item.lockId}`}
+            </Text>
+          </View>
+          <Menu
+            opened={dropdownVisible === item.lockId}
+            onBackdropPress={() => setDropdownVisible(null)}
+          >
+            <MenuTrigger onPress={() => setDropdownVisible(item.lockId)}>
+              <View style={[s.cardHeaderRight, s.settingsButton]}>
+                <Text style={s.settingsIcon}>⚙️</Text>
+                <Text style={s.settingsText}>Settings</Text>
+              </View>
+            </MenuTrigger>
+            <MenuOptions
+              customStyles={{
+                optionsContainer: s.menuOptionsContainer,
+              }}
+            >
+              <MenuOption
+                onSelect={() => {
+                  setSelectedLockForRename(item);
+                  setNewLockName(item.name || `Lock #${item.lockId}`);
+                  setIsRenameModalVisible(true);
+                  setDropdownVisible(null);
+                }}
+              >
+                <Text style={s.menuOptionText}>Rename Lock</Text>
+              </MenuOption>
+              <MenuOption
+                onSelect={() =>
+                  handleDelete(item.lockId, item.name || `Lock #${item.lockId}`)
+                }
+              >
+                <Text style={[s.menuOptionText, { color: 'red' }]}>
+                  Delete Lock
+                </Text>
+              </MenuOption>
+            </MenuOptions>
+          </Menu>
         </View>
 
-        <View style={{ gap: 6 }}>
-          {(role === 'admin' || role === 'owner') && item.claimed && !item.setupComplete && (
-            <TouchableOpacity
-              style={[s.smallBtn, { backgroundColor: '#7B1FA2' }]}
-              onPress={() => handleSetOwnership(item)}
-              disabled={ownershipModalVisible}
-            >
-              <Text style={s.smallBtnTxt}>Set Ownership</Text>
-            </TouchableOpacity>
-          )}
-
-          {isAdminOrOwner && item.setupComplete && (
-            <TouchableOpacity
-              style={[s.smallBtn, { backgroundColor: '#2196F3' }]}
-              onPress={() => goManage(item.lockId, item.name)}
-            >
-              <Text style={s.smallBtnTxt}>Manage</Text>
-            </TouchableOpacity>
-          )}
-
-          {isAdminOrOwner && item.setupComplete && (
-            <TouchableOpacity
-              style={[s.smallBtn, { backgroundColor: '#FFC107' }]}
-              onPress={() => goEdit(item.lockId, item.name)}
-            >
-              <Text style={s.smallBtnTxt}>Rename Lock</Text>
-            </TouchableOpacity>
-          )}
-
-          {item.setupComplete && (
+        <View style={{ marginTop: 15, marginBottom: 5, gap: 8, alignItems: 'center' }}>
+          {!item.setupComplete ? (
+            (role === 'admin' || role === 'owner') &&
+            item.claimed && (
+              <TouchableOpacity
+                style={[s.btn, { width: '90%' }]}
+                onPress={() => handleSetOwnership(item)}
+                disabled={ownershipModalVisible}
+              >
+                <Text style={s.bt}>Finish Setup</Text>
+              </TouchableOpacity>
+            )
+          ) : (
             <TouchableOpacity
               style={[
-                s.smallBtn,
-                { backgroundColor: '#7B1FA2' },
+                s.btn,
+                { width: '90%' },
                 unlockStatus === 'Failed' && { backgroundColor: '#b23b3b' },
                 unlockStatus === 'Unlocked!' && { backgroundColor: '#4CAF50' },
               ]}
               onPress={() => handleOneClickUnlock(item.lockId)}
               disabled={!!unlockStatus && unlockStatus !== 'Failed'}
             >
-              <Text style={s.smallBtnTxt}>
+              <Text style={s.bt}>
                 {unlockStatus ? unlockStatus : 'Unlock'}
               </Text>
             </TouchableOpacity>
           )}
 
-          {role === 'owner' && (
+          {isAdminOrOwner && item.setupComplete && (
             <TouchableOpacity
-              onPress={() =>
-                handleDelete(item.lockId, item.name || `Lock #${item.lockId}`)
-              }
-              disabled={loading}
-              style={[s.btn, { backgroundColor: '#b23b3b' }]}
+              style={[s.smallBtn, { backgroundColor: '#2196F3', width: '90%' }]}
+              onPress={() => goManage(item.lockId, item.name)}
             >
-              <Text style={s.bt}>{loading ? '...' : 'Delete Lock'}</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <Text style={{color: 'white', marginRight: 8, fontSize: 16}}>👤</Text>
+                <Text style={s.smallBtnTxt}>Share Access</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -338,64 +400,99 @@ export default function LocksHomeScreen() {
   };
 
   return (
-    <View style={s.c}>
-      <View style={s.header}>
-        <Text style={s.title}>My Locks</Text>
-      </View>
-
-      {locks.length === 0 && !loading ? (
-        <Text style={s.empty}>
-          {!activeWorkspace
-            ? 'no locks yet. tap + button to claim one'
-            : role === 'admin'
-            ? 'No locks claimed yet'
-            : role === 'user'
-            ? 'no locks assigned'
-            : 'No locks yet. Tap + to claim your first lock.'}
-        </Text>
-      ) : (
-        <FlatList
-          data={locks}
-          keyExtractor={it => String(it.lockId)}
-          renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 100 }}
-        />
-      )}
-
-      {(!activeWorkspace || role === 'owner') && (
-        <TouchableOpacity style={s.fab} onPress={goClaim}>
-          <Text style={s.fabTxt}>＋</Text>
-        </TouchableOpacity>
-      )}
-
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={ownershipModalVisible}
-        onRequestClose={() => {
-          setOwnershipModalVisible(!ownershipModalVisible);
-        }}
-      >
-        <View style={s.centeredView}>
-          <View style={s.modalView}>
-            <Text style={s.modalText}>
-              Setting ownership to lock #{selectedLock?.lockId}
-            </Text>
-            <Text style={s.modalGuide}>
-              Please stand near the lock. Do not turn off the app or exit the
-              screen.
-            </Text>
-            <Text style={s.modalStatus}>{ownershipStatus}</Text>
-          </View>
+    <MenuProvider>
+      <View style={s.c}>
+        <View style={s.header}>
+          <Text style={s.title}>My Locks</Text>
         </View>
-      </Modal>
 
-      {(role === 'user' || !activeWorkspace) && (
-      <TouchableOpacity style={s.signOut} onPress={signOut}>
-        <Text style={s.signOutTxt}>Sign Out</Text>
-      </TouchableOpacity>
-      )}
-    </View>
+        {locks.length === 0 && !loading ? (
+          <Text style={s.empty}>
+            {!activeWorkspace
+              ? 'no locks yet. tap + button to claim one'
+              : role === 'admin'
+              ? 'No locks claimed yet'
+              : role === 'user'
+              ? 'no locks assigned'
+              : 'No locks yet. Tap + to claim your first lock.'}
+          </Text>
+        ) : (
+          <FlatList
+            data={locks}
+            keyExtractor={it => String(it.lockId)}
+            renderItem={renderItem}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          />
+        )}
+
+        {(!activeWorkspace || role === 'owner') && (
+          <TouchableOpacity style={s.fab} onPress={goClaim}>
+            <Text style={s.fabTxt}>＋</Text>
+          </TouchableOpacity>
+        )}
+
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isRenameModalVisible}
+          onRequestClose={() => setIsRenameModalVisible(false)}
+        >
+          <View style={s.centeredView}>
+            <View style={s.modalView}>
+              <Text style={s.modalText}>Rename Lock</Text>
+              <TextInput
+                style={s.input}
+                onChangeText={setNewLockName}
+                value={newLockName}
+                placeholder="Enter new lock name"
+                placeholderTextColor="#999"
+              />
+              <TouchableOpacity
+                style={[s.btn, { marginTop: 10, width: '100%' }]}
+                onPress={handleRenameLock}
+                disabled={isRenaming}
+              >
+                <Text style={s.bt}>{isRenaming ? 'Saving...' : 'Save Changes'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btn, { marginTop: 10, width: '100%', backgroundColor: '#555' }]}
+                onPress={() => setIsRenameModalVisible(false)}
+              >
+                <Text style={s.bt}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={ownershipModalVisible}
+          onRequestClose={() => {
+            setOwnershipModalVisible(!ownershipModalVisible);
+          }}
+        >
+          <View style={s.centeredView}>
+            <View style={s.modalView}>
+              <Text style={s.modalText}>
+                Setting ownership to lock #{selectedLock?.lockId}
+              </Text>
+              <Text style={s.modalGuide}>
+                Please stand near the lock. Do not turn off the app or exit the
+                screen.
+              </Text>
+              <Text style={s.modalStatus}>{ownershipStatus}</Text>
+            </View>
+          </View>
+        </Modal>
+
+        {(role === 'user' || !activeWorkspace) && (
+          <TouchableOpacity style={s.signOut} onPress={signOut}>
+            <Text style={s.signOutTxt}>Sign Out</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </MenuProvider>
   );
 }
 
@@ -412,11 +509,37 @@ const s = StyleSheet.create({
     backgroundColor: '#14141c',
     borderRadius: 12,
     padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#222',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lockIcon: {
+    color: 'white',
+    fontSize: 20,
+    marginRight: 10,
+  },
+  settingsIcon: {
+    color: 'white',
+    fontSize: 20,
+    marginRight: 5,
+  },
+  settingsText: {
+    color: 'white',
+    fontWeight: '600',
   },
   cardTitle: { color: 'white', fontWeight: '700' },
   cardMeta: { color: '#aaa', marginTop: 2 },
@@ -501,5 +624,29 @@ const s = StyleSheet.create({
     textAlign: 'center',
     color: '#888',
     fontSize: 12,
+  },
+  settingsButton: {
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  menuOptionsContainer: {
+    backgroundColor: '#2c2c2e',
+    borderRadius: 8,
+    padding: 5,
+  },
+  menuOptionText: {
+    color: 'white',
+    fontSize: 16,
+    padding: 10,
+  },
+  input: {
+    width: '100%',
+    backgroundColor: '#333',
+    color: 'white',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 20,
   },
 });
