@@ -137,25 +137,25 @@ export default function LocksHomeScreen() {
     }, [load]),
   );
 
-  const handleDelete = (lockId, lockName) => {
+  const handleUnclaimAndReset = (lockId, lockName) => {
     Alert.alert(
-      `Delete "${lockName}"?`,
-      'This action is permanent and cannot be undone. Are you sure?',
+      `Unclaim and Reset "${lockName}"?`,
+      'This will remove the lock from your workspace and reset it to factory settings. You will need to claim it again to use it.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Unclaim & Reset',
           style: 'destructive',
           onPress: async () => {
             if (!token || !activeWorkspace) return;
             try {
               setLoading(true);
               await deleteLock(token, activeWorkspace.workspace_id, lockId);
-              Toast.show({ type: 'success', text1: 'Lock deleted' });
+              Toast.show({ type: 'success', text1: 'Lock unclaimed' });
               await load();
             } catch (e) {
-              console.log('Delete failed', e);
-              Toast.show({ type: 'error', text1: 'Delete failed' });
+              console.log('Unclaim failed', e);
+              Toast.show({ type: 'error', text1: 'Unclaim failed' });
             } finally {
               setLoading(false);
             }
@@ -405,15 +405,17 @@ export default function LocksHomeScreen() {
               >
                 <Text style={s.menuOptionText}>Rename Lock</Text>
               </MenuOption>
-              <MenuOption
-                onSelect={() =>
-                  handleDelete(item.lockId, item.name || `Lock #${item.lockId}`)
-                }
-              >
-                <Text style={[s.menuOptionText, { color: 'red' }]}>
-                  Delete Lock
-                </Text>
-              </MenuOption>
+              {role === 'owner' && (
+                <MenuOption
+                  onSelect={() =>
+                    handleUnclaimAndReset(item.lockId, item.name || `Lock #${item.lockId}`)
+                  }
+                >
+                  <Text style={[s.menuOptionText, { color: 'red' }]}>
+                    Unclaim & Reset
+                  </Text>
+                </MenuOption>
+              )}
             </MenuOptions>
           </Menu>
         </View>

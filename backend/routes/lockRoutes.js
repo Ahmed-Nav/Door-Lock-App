@@ -179,8 +179,8 @@ router.get(
 router.delete(
   "/locks/:lockId",
   verifyClerkOidc,
-  extractActiveWorkspace, 
-  requireAdmin, 
+  extractActiveWorkspace,
+  requireOwner,
   async (req, res) => {
     try {
       await connectDB();
@@ -188,29 +188,34 @@ router.delete(
       if (!Number.isFinite(lockId))
         return res.status(400).json({ ok: false, err: "bad-lockId" });
 
-      
       const lock = await Lock.findOne({
         lockId: lockId,
-        workspace_id: req.workspaceId, 
-      }).lean();
+        workspace_id: req.workspaceId,
+      });
 
       if (!lock)
         return res
           .status(404)
           .json({ ok: false, err: "not-found-in-workspace" });
-
       
+      lock.workspace_id = null;
+      lock.claimed = false;
+      lock.ownerAccountId = null;
+      lock.setupComplete = false;
+      lock.ownerKeyActivated = false;
+      
+      await lock.save();
+
       await Promise.all([
         AclVersion.deleteMany({
           lockId: lockId,
           workspace_id: req.workspaceId,
-        }), 
-        LockKey.deleteMany({ lockId: lockId, workspace_id: req.workspaceId }), 
+        }),
+        LockKey.deleteMany({ lockId: lockId, workspace_id: req.workspaceId }),
         Group.updateMany(
-          { workspace_id: req.workspaceId }, 
+          { workspace_id: req.workspaceId },
           { $pull: { lockIds: lockId } }
         ),
-        Lock.deleteOne({ lockId: lockId, workspace_id: req.workspaceId }), 
       ]);
 
       res.json({ ok: true });

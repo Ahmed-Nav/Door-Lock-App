@@ -6,6 +6,8 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { acceptInvite } from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export default function InviteHandlerScreen() {
   const { token, refreshUser } = useAuth();
   const route = useRoute<any>();
@@ -14,12 +16,25 @@ export default function InviteHandlerScreen() {
   useEffect(() => {
     const handleAccept = async () => {
       const inviteToken = route.params?.token;
-      if (!inviteToken || !token) {
-        Toast.show({ type: 'error', text1: 'Invalid invite' });
+      if (!inviteToken) {
+        Toast.show({ type: 'error', text1: 'Invalid invite link' });
         navigation.replace('AdminHome');
         return;
       }
 
+      // V2: User is NOT logged in. Store token and prompt for sign-in.
+      if (!token) {
+        await AsyncStorage.setItem('pendingInviteToken', inviteToken);
+        Toast.show({
+          type: 'info',
+          text1: 'Please sign in',
+          text2: 'Sign in to accept your workspace invitation.',
+        });
+        navigation.replace('RoleSelect'); // Go to sign-in
+        return;
+      }
+
+      // V2: User IS logged in. Accept invite directly.
       try {
         await acceptInvite(token, inviteToken);
         Toast.show({

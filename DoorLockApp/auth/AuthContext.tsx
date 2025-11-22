@@ -9,12 +9,13 @@ import React, {
 import { AuthConfiguration, authorize, revoke } from 'react-native-app-auth';
 import jwtDecode from 'jwt-decode';
 import * as Keychain from 'react-native-keychain';
-import { getMe } from '../services/apiService';
+import { getMe, acceptInvite } from '../services/apiService';
 import { registerDeviceKeyWithServer } from '../lib/keys';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type WorkspaceRole = 'owner' | 'admin' | 'user';
+const PENDING_INVITE_KEY = 'pendingInviteToken';
 
 type Workspace = {
   workspace_id: string;
@@ -215,7 +216,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setToken(rawToken);
       await saveToken(rawToken); 
-      await loadAppData(rawToken); 
+      await loadAppData(rawToken);
+
+      // V2: Check for and process a pending invitation
+      const pendingInviteToken = await AsyncStorage.getItem(PENDING_INVITE_KEY);
+      if (pendingInviteToken) {
+        try {
+          await acceptInvite(rawToken, pendingInviteToken);
+          Toast.show({
+            type: 'success',
+            text1: 'Success!',
+            text2: 'You have joined the workspace.',
+          });
+          // Refresh user data to get new workspace
+          await loadAppData(rawToken);
+        } catch (e) {
+          Toast.show({
+            type: 'error',
+            text1: 'Invite Failed',
+            text2: 'Could not accept invite.',
+          });
+        } finally {
+          await AsyncStorage.removeItem(PENDING_INVITE_KEY);
+        }
+      }
+ 
       try {
         await registerDeviceKeyWithServer(rawToken);
       } catch {}
@@ -282,3 +307,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 };
+
