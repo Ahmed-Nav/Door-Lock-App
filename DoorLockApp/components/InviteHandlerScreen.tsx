@@ -54,6 +54,9 @@ export default function InviteHandlerScreen() {
           text2: err?.response?.data?.message || 'Could not accept invite.',
         });
         navigation.replace('AdminHome');
+      } finally {
+        // CRITICAL: Always clear the pending token after attempting to use it.
+        await AsyncStorage.removeItem('pendingInviteToken');
       }
     };
 

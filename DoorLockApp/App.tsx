@@ -41,12 +41,12 @@ import EditLockModal from './components/EditLockModal';
 import UserManagementScreen from './components/UserManagementScreen';
 
 import InviteHandlerScreen from './components/InviteHandlerScreen';
+import ResolveAuthScreen from './components/ResolveAuthScreen';
 
 export type RootStackParamList = {
   AdminHome: undefined;
-
+  ResolveAuth: undefined;
   RoleSelect: undefined;
-
   Unlock: undefined;
 
   LocksHome: undefined;
@@ -130,91 +130,33 @@ function Router() {
   if (!token) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-   
         <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
-      </Stack.Navigator>
-    );
-  }
-
-
-  if (!activeWorkspace) {
-    return (
-      <Stack.Navigator>
-        <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
-        <Stack.Screen
-          name="ClaimLock"
-          component={ClaimLockScreen}
-          options={{ title: 'Add New Lock' }}
-        />
-        <Stack.Screen
-          name="ClaimQr"
-          component={ClaimQrScreen}
-          options={{ title: 'Scan QR Code' }}
-        />
-
-        <Stack.Screen
-          name="GlobalGroups"
-          component={GlobalGroupsScreen}
-          options={{ title: 'User Groups' }}
-        />
-
-        <Stack.Screen
-          name="ManageLockAccess"
-          component={ManageLockAccessScreen}
-          options={{ title: 'Manage Lock Access' }}
-        />
-
-        <Stack.Screen
-          name="GroupDetail"
-          component={GroupDetail}
-          options={{ title: 'Group Detail' }}
-        />
-
-        <Stack.Screen
-          name="Ownership"
-          component={OwnershipScreen}
-          options={{ title: 'Ownership' }}
-        />
+        {/* The InviteHandler must also be available to the unauthenticated user navigator */}
         <Stack.Screen name="InviteHandler" component={InviteHandlerScreen} />
       </Stack.Navigator>
     );
   }
 
-  if (role === 'admin' || role === 'owner') {
-    return (
-      <Stack.Navigator>
-        <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
-        <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
-        <Stack.Screen name="UserManagement" component={UserManagementScreen} />
-        <Stack.Screen name="EditLock" component={EditLockModal} />
-        <Stack.Screen name="ClaimLock" component={ClaimLockScreen} />
-        <Stack.Screen name="ClaimQr" component={ClaimQrScreen} />
-        <Stack.Screen name="GlobalGroups" component={GlobalGroupsScreen} />
-        <Stack.Screen
-          name="ManageLockAccess"
-          component={ManageLockAccessScreen}
-        />
-        <Stack.Screen name="GroupDetail" component={GroupDetail} />
-        <Stack.Screen name="Ownership" component={OwnershipScreen} />
-        <Stack.Screen name="Unlock" component={UnlockScreen} />
-        <Stack.Screen name="InviteHandler" component={InviteHandlerScreen} />
-      </Stack.Navigator>
-    );
-  }
-
+  // If we have a token, we ALWAYS go to the resolver first.
+  // The resolver will then decide where to send the user.
   return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="LocksHome"
-        component={LocksHomeScreen}
-        options={{ title: 'My Locks' }}
-      />
-      <Stack.Screen
-        name="Unlock"
-        component={UnlockScreen}
-        options={{ title: 'Unlock' }}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ResolveAuth" component={ResolveAuthScreen} />
       <Stack.Screen name="InviteHandler" component={InviteHandlerScreen} />
+      <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
+      <Stack.Screen name="LocksHome" component={LocksHomeScreen} />
+      <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+      <Stack.Screen name="EditLock" component={EditLockModal} />
+      <Stack.Screen name="ClaimLock" component={ClaimLockScreen} />
+      <Stack.Screen name="ClaimQr" component={ClaimQrScreen} />
+      <Stack.Screen name="GlobalGroups" component={GlobalGroupsScreen} />
+      <Stack.Screen
+        name="ManageLockAccess"
+        component={ManageLockAccessScreen}
+      />
+      <Stack.Screen name="GroupDetail" component={GroupDetail} />
+      <Stack.Screen name="Ownership" component={OwnershipScreen} />
+      <Stack.Screen name="Unlock" component={UnlockScreen} />
     </Stack.Navigator>
   );
 }
