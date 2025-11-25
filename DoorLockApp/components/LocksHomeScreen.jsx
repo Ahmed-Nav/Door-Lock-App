@@ -360,6 +360,25 @@ export default function LocksHomeScreen() {
     }
   };
 
+  const confirmSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          onPress: signOut,
+          style: 'destructive',
+        },
+      ],
+      { cancelable: false }
+    );
+  };
+
   const goClaim = () => nav.navigate('ClaimLock');
   const goManage = (lockId, name) =>
     nav.navigate('ManageLockAccess', { lockId: lockId, lockName: name });
@@ -585,7 +604,7 @@ export default function LocksHomeScreen() {
         </Modal>
 
         {(role === 'user' || !activeWorkspace) && (
-          <TouchableOpacity style={s.signOut} onPress={signOut}>
+          <TouchableOpacity style={s.signOut} onPress={confirmSignOut}>
             <Text style={s.signOutTxt}>Sign Out</Text>
           </TouchableOpacity>
         )}

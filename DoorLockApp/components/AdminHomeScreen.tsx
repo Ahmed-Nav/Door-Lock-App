@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -28,6 +29,25 @@ export default function AdminHomeScreen() {
         label: w.name || `Workspace ${w.workspace_id.slice(-4)}`, 
         value: w.workspace_id,
       })) || [];
+
+    const confirmSignOut = () => {
+      Alert.alert(
+        'Sign Out',
+        'Are you sure you want to sign out?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Sign Out',
+            onPress: signOut,
+            style: 'destructive',
+          },
+        ],
+        { cancelable: false }
+      );
+    };
 
   return (
     <SafeAreaView style={s.container}>
@@ -75,7 +95,7 @@ export default function AdminHomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={s.signOut} onPress={signOut}>
+      <TouchableOpacity style={s.signOut} onPress={confirmSignOut}>
         <Text style={s.signOutText}>Sign Out</Text>
       </TouchableOpacity>
     </SafeAreaView>

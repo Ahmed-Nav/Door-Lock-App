@@ -205,8 +205,8 @@ export default function ClaimLockScreen() {
           editable={!isScanMode}
         />
 
-        <TouchableOpacity style={s.btn} onPress={doClaim}>
-          <Text style={s.bt}>Claim This Lock</Text>
+        <TouchableOpacity style={[s.btn, { backgroundColor: '#7B1FA2' }]} onPress={doClaim}>
+          <Text style={s.bt}>Add Lock</Text>
         </TouchableOpacity>
       </>
     );
