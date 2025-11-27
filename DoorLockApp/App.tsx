@@ -18,21 +18,13 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 
 import RoleSelectScreen from './components/RoleSelectScreen';
 
-import UnlockScreen from './components/UnlockScreen';
-
 import AdminHomeScreen from './components/AdminHomeScreen';
 
 import ManageLockAccessScreen from './components/ManageLockAccessScreen';
 
-import GlobalGroupsScreen from './components/GlobalGroupsScreen';
-
-import GroupDetail from './components/GroupDetail';
-
 import ClaimLockScreen from './components/ClaimLockScreen';
 
 import ClaimQrScreen from './components/ClaimQrScreen';
-
-import OwnershipScreen from './components/OwnershipScreen';
 
 import LocksHomeScreen from './components/LocksHomeScreen';
 
@@ -47,7 +39,6 @@ export type RootStackParamList = {
   AdminHome: undefined;
   ResolveAuth: undefined;
   RoleSelect: undefined;
-  Unlock: undefined;
 
   LocksHome: undefined;
 
@@ -59,15 +50,15 @@ export type RootStackParamList = {
 
   ClaimQr: undefined;
 
-  GlobalGroups: undefined;
+  
 
-  ManageLockAccess: { lockId: number; lockName?: string };
+    ManageLockAccess: { lockId: number; lockName?: string };
 
-  GroupDetail: { groupId: string };
+  
 
-  Ownership: undefined;
+    InviteHandler: { token: string };
 
-  InviteHandler: { token: string };
+  
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -149,14 +140,10 @@ function Router() {
       <Stack.Screen name="EditLock" component={EditLockModal} />
       <Stack.Screen name="ClaimLock" component={ClaimLockScreen} />
       <Stack.Screen name="ClaimQr" component={ClaimQrScreen} />
-      <Stack.Screen name="GlobalGroups" component={GlobalGroupsScreen} />
       <Stack.Screen
         name="ManageLockAccess"
         component={ManageLockAccessScreen}
       />
-      <Stack.Screen name="GroupDetail" component={GroupDetail} />
-      <Stack.Screen name="Ownership" component={OwnershipScreen} />
-      <Stack.Screen name="Unlock" component={UnlockScreen} />
     </Stack.Navigator>
   );
 }
