@@ -28,6 +28,7 @@
     "react-native-android-location-enabler": "^3.0.1",
     "react-native-app-auth": "^8.0.3",
     "react-native-ble-plx": "^3.5.0",
+    "react-native-bootsplash": "^6.3.11",
     "react-native-dropdown-picker": "^5.4.6",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.28.0",

@@ -1,6 +1,6 @@
 // App.tsx
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import 'react-native-gesture-handler';
 
@@ -13,6 +13,8 @@ import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 import * as Sentry from '@sentry/react-native';
 
 import { Linking, ActivityIndicator } from 'react-native';
+
+import BootSplash from 'react-native-bootsplash';
 
 import { AuthProvider, useAuth } from './auth/AuthContext';
 
@@ -112,6 +114,12 @@ const toastConfig = {
 
 function Router() {
   const { role, loading, token, activeWorkspace } = useAuth();
+
+  useEffect(() => {
+    if (!loading) {
+      BootSplash.hide({ fade: true });
+    }
+  }, [loading]);
 
   if (loading) {
     return null; 
