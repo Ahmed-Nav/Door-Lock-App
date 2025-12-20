@@ -19,6 +19,7 @@ const PENDING_INVITE_KEY = 'pendingInviteToken';
 
 type Workspace = {
   workspace_id: string;
+  name: string;
   role: WorkspaceRole;
 };
 

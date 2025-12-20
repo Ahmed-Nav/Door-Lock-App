@@ -1,3 +1,4 @@
+const User = require("../models/User");
 const router = require("express").Router();
 const verifyClerkOidc = require("../middleware/verifyClerkOidc");
 const {
@@ -9,12 +10,22 @@ const extractActiveWorkspace = require("../middleware/extractActiveWorkspace");
 
 router.get("/me", verifyClerkOidc, async (req, res) => {
   try {
+    const user = await User.findById(req.dbUser._id).populate(
+      "workspaces.workspace_id"
+    );
+
+    const workspaces = user.workspaces.map(w => ({
+      name: w.workspace_id.name,
+      workspace_id: w.workspace_id._id.toString(),
+      role: w.role,
+    }));
+
     res.json({
       ok: true,
       user: {
         id: req.dbUser._id.toString(),
         email: req.dbUser.email,
-        workspaces: req.dbUser.workspaces, 
+        workspaces: workspaces,
       },
     });
   } catch (e) {
